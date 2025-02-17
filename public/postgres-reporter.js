@@ -457,8 +457,9 @@
                 headers: {
                   'Content-Type': 'application/json',
                   'X-API-Key': this.config.apiKey,
-                  'shop_id': shopId  // Added header with the shop identifier
+                  'x-shop-id': shopId  // Use 'x-shop-id' instead of 'shop_id'
                 },
+                
                 mode: 'cors',
                 credentials: 'omit',
                 body: JSON.stringify(events)
