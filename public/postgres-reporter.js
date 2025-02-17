@@ -458,30 +458,30 @@
                 'X-API-Key': this.config.apiKey
               },
               mode: 'cors',
-            body: JSON.stringify(events)
+              credentials: 'omit',  // Changed from 'include' to 'omit'
+              body: JSON.stringify(events)
+            });
+  
+            if (!r.ok) {
+              const errorText = await r.text();
+              console.error('API Error Response:', errorText);
+              throw new Error(`HTTP error: ${r.status}`);
+            }
+            return r.json();
+          }, {
+            maxRetries: this.config.retryAttempts,
+            baseDelay: this.config.retryDelay
           });
-
-          if (!r.ok) {
-            const errorText = await r.text();
-            console.error('API Error Response:', errorText);
-            throw new Error(`HTTP error: ${r.status}`);
-          }
-          return r.json();
-        }, {
-          maxRetries: this.config.retryAttempts,
-          baseDelay: this.config.retryDelay
-        });
-
-        console.log('Events sent:', resp);
-        return resp;
-      } catch(err) {
-        console.error('Failed to send events:', err);
-        throw err;
-      } finally {
-        console.groupEnd();
+  
+          console.log('Events sent:', resp);
+          return resp;
+        } catch(err) {
+          console.error('Failed to send events:', err);
+          throw err;
+        } finally {
+          console.groupEnd();
+        }
       }
-    }
-
     static initialize(config) {
       console.group('Initializing PostgreSQL Reporter');
       try {
