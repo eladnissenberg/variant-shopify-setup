@@ -144,7 +144,7 @@
      
         initializeCore(config){
           this.config = {
-            apiEndpoint: config.apiEndpoint + '/events',
+            apiEndpoint: (config.apiEndpoint || '').replace(/\/+/g, '/').replace(':/', '://'),  // Fix double slashes
             apiKey: config.apiKey,
             retryAttempts: config.retryAttempts || 3,
             retryDelay: config.retryDelay || 1000,
@@ -421,8 +421,10 @@
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
-                  'X-API-Key': this.config.apiKey
+                  'X-API-Key': this.config.apiKey,
+                  'Origin': window.location.origin
                 },
+                credentials: 'include',
                 body: JSON.stringify(events)
               });
               if (!r.ok) {
