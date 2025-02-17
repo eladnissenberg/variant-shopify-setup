@@ -47,7 +47,7 @@
         console.group('Setting up core');
         this.core = new TrackingCore();
         this.assignmentManager = new AssignmentManager();
-  
+        
         // Instead of Liquid settings, we'll use window.abTestingConfig
         this.settings = window.abTestingConfig || {};
         console.log('Settings loaded:', this.settings);
@@ -96,32 +96,31 @@
         try {
           // Get tests from window.abTestingConfig.tests instead of Liquid settings
           const tests = this.settings.tests || [];
-  
+      
           this.allTests = tests.map(test => {
             // Force modeValue to be a string to safely use startsWith()
             const modeValue = String(test.mode || 'test');
             let forcedVariant = null;
             let testMode = 'test';
-  
+      
             if (modeValue === 'test') {
               testMode = 'test';
             } else if (modeValue.startsWith('v')) {
               forcedVariant = modeValue.replace('v', '');
               testMode = 'forced';
             }
-  
+      
             return {
               id: test.id,
               mode: testMode,
               forcedVariant,
-              location: test.location || 'global', // used as the test's pageGroup
+              location: test.location || 'global',
               device: test.device || 'both',
               testName: test.name || '',
-              pageSpecificUrl: test.pageSpecificUrl || "", // new property for page-specific tests
               possibleNonZeroVariants: [...Array(test.variantsCount || 1)].map((_, i) => String(i + 1))
             };
           });
-  
+      
           console.log('All tests from settings:', this.allTests);
         } catch (err) {
           console.error('Error loading tests:', err);
@@ -129,6 +128,7 @@
           console.groupEnd();
         }
       }
+      
   
       assignAllGroups() {
         console.group('Assigning variants for each group');
@@ -165,9 +165,6 @@
             pageGroup: group,
             name: ft.testName || ''
           };
-          if (ft.pageSpecificUrl) {
-            assignmentData.pageSpecificUrl = ft.pageSpecificUrl;
-          }
           this.setOrKeepAssignment(ft, assignmentData);
         });
   
@@ -199,9 +196,6 @@
               pageGroup: group,
               name: t.testName || ''
             };
-            if (t.pageSpecificUrl) {
-              assignmentData.pageSpecificUrl = t.pageSpecificUrl;
-            }
             this.setOrKeepAssignment(t, assignmentData);
           });
         } else {
@@ -223,9 +217,6 @@
                 pageGroup: group,
                 name: testObj.testName || ''
               };
-              if (testObj.pageSpecificUrl) {
-                assignmentData.pageSpecificUrl = testObj.pageSpecificUrl;
-              }
               this.setOrKeepAssignment(testObj, assignmentData);
             } else {
               const assignmentData = {
@@ -237,9 +228,6 @@
                 pageGroup: group,
                 name: testObj.testName || ''
               };
-              if (testObj.pageSpecificUrl) {
-                assignmentData.pageSpecificUrl = testObj.pageSpecificUrl;
-              }
               this.setOrKeepAssignment(testObj, assignmentData);
             }
           });
@@ -262,12 +250,10 @@
           return;
         }
   
-        // Get current template from URL or data attribute (fallback to "home")
+        // Get current template from URL or data attribute instead of Liquid
         const path = window.location.pathname;
-        let currentTemplate =
-          document.body.getAttribute('data-template') ||
-          path.split('/')[1] ||
-          'home';
+        let currentTemplate = document.body.getAttribute('data-template') || 
+                            path.split('/')[1] || 'home';
   
         const templateToGroup = {
           product: 'product',
@@ -278,24 +264,12 @@
         };
   
         const mappedGroup = templateToGroup[currentTemplate] || 'home';
-        // Relevant groups include "global" and the current mapped group.
         const relevantGroups = ['global', mappedGroup];
   
-        console.log('Current path:', path);
         console.log('Relevant groups for apply:', relevantGroups);
   
         const assts = this.assignmentManager.getAllAssignments() || [];
-  
-        // For page-specific tests, check if the provided URL (or portion of it)
-        // is contained in the current location; otherwise, use relevant groups.
-        const toApply = assts.filter(a => {
-          if (a.pageGroup === 'page_specific') {
-            return a.pageSpecificUrl && path.indexOf(a.pageSpecificUrl) !== -1;
-          } else {
-            return relevantGroups.includes(a.pageGroup);
-          }
-        });
-  
+        const toApply = assts.filter(a => relevantGroups.includes(a.pageGroup));
         console.log('Assignments to apply:', toApply);
   
         const prefix = 'ab';
@@ -404,4 +378,3 @@
       initSystem();
     }
   })();
-  
