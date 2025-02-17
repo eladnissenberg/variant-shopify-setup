@@ -7,20 +7,49 @@
       "use": "@vercel/static"
     }
   ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "https://www.inokim.com"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "X-API-Key, X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version"
+        },
+        {
+          "key": "Access-Control-Allow-Credentials",
+          "value": "true"
+        }
+      ]
+    }
+  ],
   "routes": [
     {
-      "src": "/api/(.*)",
+      "src": "/api/events(.*)",
       "headers": {
         "Access-Control-Allow-Origin": "https://www.inokim.com",
         "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "X-API-Key, Content-Type",
+        "Access-Control-Allow-Headers": "X-API-Key, X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version",
         "Access-Control-Allow-Credentials": "true"
       },
       "continue": true
     },
     {
       "src": "/(.*)",
-      "dest": "/public/$1"
+      "dest": "/public/$1",
+      "headers": {
+        "Access-Control-Allow-Origin": "https://www.inokim.com",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "X-API-Key, Content-Type",
+        "Access-Control-Allow-Credentials": "true"
+      }
     }
   ]
 }
