@@ -1,0 +1,6 @@
+Get-ChildItem -Path "C:\Users\Eli\Desktop\Varinat\Variant_Shopify_Setup\public" -Recurse | ForEach-Object {
+    Write-Host "`n=== File: $($_.FullName) ===`n" -ForegroundColor Green
+    if (-not $_.PSIsContainer) {
+        Get-Content $_.FullName
+    }
+}

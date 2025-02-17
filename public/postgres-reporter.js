@@ -458,7 +458,7 @@
                 'X-API-Key': this.config.apiKey
               },
               mode: 'cors',
-              credentials: 'omit',  // Changed from 'include' to 'omit'
+              credentials: 'omit', // Don't send credentials
               body: JSON.stringify(events)
             });
   
@@ -482,6 +482,8 @@
           console.groupEnd();
         }
       }
+
+
     static initialize(config) {
       console.group('Initializing PostgreSQL Reporter');
       try {
