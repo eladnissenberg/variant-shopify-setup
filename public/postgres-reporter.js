@@ -450,29 +450,31 @@
   
           console.log('Sending to endpoint:', this.config.apiEndpoint);
   
-          const resp = await this.core.withRetry(async () => {
-            const r = await fetch(this.config.apiEndpoint, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-API-Key': this.config.apiKey
-              },
-              mode: 'cors',
-              credentials: 'omit', // Don't send credentials
-              body: JSON.stringify(events)
+          const shopId = window.Shopify?.shop || window.location.hostname;
+            const r = await this.core.withRetry(async () => {
+              const r = await fetch(this.config.apiEndpoint, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-API-Key': this.config.apiKey,
+                  'shop_id': shopId  // Added header with the shop identifier
+                },
+                mode: 'cors',
+                credentials: 'omit',
+                body: JSON.stringify(events)
+              });
+
+              if (!r.ok) {
+                const errorText = await r.text();
+                console.error('API Error Response:', errorText);
+                throw new Error(`HTTP error: ${r.status}`);
+              }
+              return r.json();
+            }, {
+              maxRetries: this.config.retryAttempts,
+              baseDelay: this.config.retryDelay
             });
-  
-            if (!r.ok) {
-              const errorText = await r.text();
-              console.error('API Error Response:', errorText);
-              throw new Error(`HTTP error: ${r.status}`);
-            }
-            return r.json();
-          }, {
-            maxRetries: this.config.retryAttempts,
-            baseDelay: this.config.retryDelay
-          });
-  
+
           console.log('Events sent:', resp);
           return resp;
         } catch(err) {
