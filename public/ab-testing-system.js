@@ -96,19 +96,20 @@
         try {
           // Get tests from window.abTestingConfig.tests instead of Liquid settings
           const tests = this.settings.tests || [];
-          
+      
           this.allTests = tests.map(test => {
-            const modeValue = test.mode || 'test';
+            // Force modeValue to be a string to safely use startsWith()
+            const modeValue = String(test.mode || 'test');
             let forcedVariant = null;
             let testMode = 'test';
-  
+      
             if (modeValue === 'test') {
               testMode = 'test';
             } else if (modeValue.startsWith('v')) {
               forcedVariant = modeValue.replace('v', '');
               testMode = 'forced';
             }
-  
+      
             return {
               id: test.id,
               mode: testMode,
@@ -119,7 +120,7 @@
               possibleNonZeroVariants: [...Array(test.variantsCount || 1)].map((_, i) => String(i + 1))
             };
           });
-  
+      
           console.log('All tests from settings:', this.allTests);
         } catch (err) {
           console.error('Error loading tests:', err);
@@ -127,6 +128,7 @@
           console.groupEnd();
         }
       }
+      
   
       assignAllGroups() {
         console.group('Assigning variants for each group');
