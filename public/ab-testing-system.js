@@ -98,8 +98,7 @@
           const tests = this.settings.tests || [];
   
           // Map each test into a standardized object.
-          // For page-specific tests, we preserve the original location and set the location
-          // to the merchant-defined URL.
+          // For page-specific tests, if a URL is provided, we use that as the location.
           this.allTests = tests.map(test => {
             // Force modeValue to be a string so we can use startsWith()
             const modeValue = String(test.mode || 'test');
@@ -115,9 +114,10 @@
   
             // Save the original location (could be "global", "homepage", etc. or "page_specific")
             let originalLocation = test.location || 'global';
-            // For page-specific tests, if a URL is provided, override location with that URL.
             let location = originalLocation;
-            if (originalLocation === "page_specific" && test.page_specific_url) {
+  
+            // For page-specific tests, if a URL is provided, override location with that URL.
+            if (originalLocation === 'page_specific' && test.page_specific_url) {
               location = test.page_specific_url;
             }
   
@@ -125,8 +125,8 @@
               id: test.id,
               mode: testMode,
               forcedVariant,
-              location: location,           // For page-specific, this is the actual URL.
-              originalLocation: originalLocation, // Preserve original value.
+              location,
+              originalLocation,
               device: test.device || 'both',
               testName: test.name || '',
               possibleNonZeroVariants: [...Array(test.variantsCount || 1)].map((_, i) => String(i + 1))
@@ -188,13 +188,12 @@
         }
   
         // Determine traffic allocation.
-        // For standard groups, use the global traffic config.
-        // For page-specific tests (where originalLocation === "page_specific"),
-        // use the traffic value from the global traffic config under the key "page_specific".
+        // For page-specific tests, use "page_specific" traffic.
+        // Otherwise, check the group name in the traffic config.
         const trafficConfig = this.settings.traffic || {};
         let traffic;
-        if (unforcedTests[0].originalLocation === "page_specific") {
-          traffic = parseInt(trafficConfig["page_specific"] || '0', 10) || 0;
+        if (unforcedTests[0].originalLocation === 'page_specific') {
+          traffic = parseInt(trafficConfig['page_specific'] || '0', 10) || 0;
         } else {
           const standardGroups = ['global', 'product', 'collection', 'cart', 'checkout'];
           if (standardGroups.includes(group)) {
@@ -203,6 +202,7 @@
             traffic = 0;
           }
         }
+  
         const fraction = traffic / 100;
         console.log(`Group=${group}, traffic=${traffic}, fraction=${fraction}`);
         const rng = Math.random();
@@ -273,62 +273,61 @@
           console.groupEnd();
           return;
         }
-      
-        // Helper: extract a normalized path from a URL or relative path.
+  
+        // If you have a <body data-template="{{ template.name }}"> in your theme,
+        // we can read it directly:
+        let currentTemplate = document.body.getAttribute('data-template');
+  
+        // Fallback logic: if data-template is not set, attempt to parse the URL.
         const getPath = (str) => {
           try {
-            // If str is a full URL, extract its pathname.
             let url = new URL(str);
             return url.pathname.replace(/\/+$/, '');
           } catch (e) {
-            // Otherwise, ensure it starts with '/' and remove trailing slashes.
             if (!str.startsWith('/')) {
               str = '/' + str;
             }
             return str.replace(/\/+$/, '');
           }
         };
-      
-        // Get the current page's normalized path.
-const currentPath = getPath(window.location.href);
-console.log('Current normalized path:', currentPath);
-
-// Determine current template/group.
-let currentTemplate = document.body.getAttribute('data-template');
-// If not set via a data attribute, determine it from the URL:
-if (!currentTemplate) {
-  if (currentPath === "/" || currentPath === "") {
-    currentTemplate = "homepage";  // explicitly set for home page
-  } else if (currentPath.indexOf('/products/') === 0) {
-    currentTemplate = 'product';
-  } else if (currentPath.indexOf('/collections/') === 0) {
-    currentTemplate = 'collection';
-  } else if (currentPath.indexOf('/cart') === 0) {
-    currentTemplate = 'cart';
-  } else if (currentPath.indexOf('/checkout') === 0) {
-    currentTemplate = 'checkout';
-  } else {
-    currentTemplate = currentPath.split('/')[1] || 'home';
-  }
-}
-console.log('Current template:', currentTemplate);
-
-const standardGroups = ['global', currentTemplate];
-console.log('Standard groups for apply:', standardGroups);
-
-      
-        // Get all valid assignments.
+  
+        const currentPath = getPath(window.location.href);
+        console.log('Current normalized path:', currentPath);
+  
+        if (!currentTemplate) {
+          if (currentPath === '/' || currentPath === '') {
+            currentTemplate = 'homepage';
+          } else if (currentPath.indexOf('/products/') === 0) {
+            currentTemplate = 'product';
+          } else if (currentPath.indexOf('/collections/') === 0) {
+            currentTemplate = 'collection';
+          } else if (currentPath.indexOf('/cart') === 0) {
+            currentTemplate = 'cart';
+          } else if (currentPath.indexOf('/checkout') === 0) {
+            currentTemplate = 'checkout';
+          } else {
+            currentTemplate = currentPath.split('/')[1] || 'home';
+          }
+        }
+  
+        console.log('Current template:', currentTemplate);
+  
+        const standardGroups = ['global', currentTemplate];
+        console.log('Standard groups for apply:', standardGroups);
+  
+        // Get all valid assignments
         const assts = this.assignmentManager.getAllAssignments() || [];
         const toApply = assts.filter(a => {
-          // If the assignment's pageGroup is one of the standard groups, apply it.
+          // If the assignment's pageGroup is one of the standard groups, apply it
           if (standardGroups.includes(a.pageGroup)) {
             return true;
           }
-          // Otherwise, treat it as a page-specific URL and compare normalized paths.
+          // Otherwise, treat it as a page-specific URL and compare normalized paths
           return getPath(a.pageGroup) === currentPath;
         });
+  
         console.log('Assignments to apply:', toApply);
-      
+  
         const prefix = 'ab';
         toApply.forEach(a => {
           if (a.variant !== '0') {
@@ -337,17 +336,16 @@ console.log('Standard groups for apply:', standardGroups);
               `${prefix}-${a.testId}`,
               `${prefix}-${a.testId}-${a.variant}`
             );
-            // Create a safe class name from pageGroup by replacing non-alphanumeric characters.
+            // Create a safe class name from pageGroup by replacing non-alphanumeric characters
             const safePageGroup = a.pageGroup.replace(/[^a-zA-Z0-9-_]/g, '-');
             document.body.classList.add(`${prefix}-${safePageGroup}`);
           } else {
             document.body.classList.add(`${prefix}-${a.testId}-0`);
           }
         });
-      
+  
         console.groupEnd();
       }
-      
   
       async trackTestAssignments() {
         console.group('Tracking Test Assignments');
