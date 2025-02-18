@@ -48,7 +48,8 @@
         this.core = new TrackingCore();
         this.assignmentManager = new AssignmentManager();
   
-        // Instead of Liquid settings, we'll use window.abTestingConfig
+        // Instead of iterating over all Liquid settings,
+        // we use window.abTestingConfig (populated by our Liquid snippet)
         this.settings = window.abTestingConfig || {};
         console.log('Settings loaded:', this.settings);
         console.groupEnd();
@@ -274,11 +275,12 @@
           return;
         }
   
-        // If you have a <body data-template="{{ template.name }}"> in your theme,
-        // we can read it directly:
+        // Use Shopify's native template information if available.
+        // Ensure your theme's <body> tag includes a data-template attribute, e.g.:
+        // <body data-template="{{ template.name }}">
         let currentTemplate = document.body.getAttribute('data-template');
   
-        // Fallback logic: if data-template is not set, attempt to parse the URL.
+        // Fallback logic if data-template is not set.
         const getPath = (str) => {
           try {
             let url = new URL(str);
@@ -300,7 +302,13 @@
           } else if (currentPath.indexOf('/products/') === 0) {
             currentTemplate = 'product';
           } else if (currentPath.indexOf('/collections/') === 0) {
-            currentTemplate = 'collection';
+            // Updated logic: if URL starts with '/collections/' and also contains '/products/',
+            // then treat it as a product page.
+            if (currentPath.indexOf('/products/') !== -1) {
+              currentTemplate = 'product';
+            } else {
+              currentTemplate = 'collection';
+            }
           } else if (currentPath.indexOf('/cart') === 0) {
             currentTemplate = 'cart';
           } else if (currentPath.indexOf('/checkout') === 0) {
@@ -309,23 +317,21 @@
             currentTemplate = currentPath.split('/')[1] || 'home';
           }
         }
-  
         console.log('Current template:', currentTemplate);
   
         const standardGroups = ['global', currentTemplate];
         console.log('Standard groups for apply:', standardGroups);
   
-        // Get all valid assignments
+        // Get all valid assignments.
         const assts = this.assignmentManager.getAllAssignments() || [];
         const toApply = assts.filter(a => {
-          // If the assignment's pageGroup is one of the standard groups, apply it
+          // If the assignment's pageGroup is one of the standard groups, apply it.
           if (standardGroups.includes(a.pageGroup)) {
             return true;
           }
-          // Otherwise, treat it as a page-specific URL and compare normalized paths
+          // Otherwise, compare normalized paths for page-specific tests.
           return getPath(a.pageGroup) === currentPath;
         });
-  
         console.log('Assignments to apply:', toApply);
   
         const prefix = 'ab';
@@ -336,7 +342,7 @@
               `${prefix}-${a.testId}`,
               `${prefix}-${a.testId}-${a.variant}`
             );
-            // Create a safe class name from pageGroup by replacing non-alphanumeric characters
+            // Create a safe class name from pageGroup by replacing non-alphanumeric characters.
             const safePageGroup = a.pageGroup.replace(/[^a-zA-Z0-9-_]/g, '-');
             document.body.classList.add(`${prefix}-${safePageGroup}`);
           } else {
