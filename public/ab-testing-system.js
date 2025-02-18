@@ -94,11 +94,14 @@
       loadActiveTestsFromSettings() {
         console.group('Loading Tests from Settings');
         try {
-          // Get tests from window.abTestingConfig.tests instead of Liquid settings
+          // Get tests from window.abTestingConfig.tests (populated by Liquid)
           const tests = this.settings.tests || [];
   
+          // Map each test into a standardized object.
+          // For page-specific tests, we preserve the original location and set the location
+          // to the merchant-defined URL.
           this.allTests = tests.map(test => {
-            // Force modeValue to be a string to safely use startsWith()
+            // Force modeValue to be a string so we can use startsWith()
             const modeValue = String(test.mode || 'test');
             let forcedVariant = null;
             let testMode = 'test';
@@ -110,9 +113,11 @@
               testMode = 'forced';
             }
   
-            // Determine location; if it's page_specific and a specific URL is provided, use that URL instead.
-            let location = test.location || 'global';
-            if (location === 'page_specific' && test.page_specific_url) {
+            // Save the original location (could be "global", "homepage", etc. or "page_specific")
+            let originalLocation = test.location || 'global';
+            // For page-specific tests, if a URL is provided, override location with that URL.
+            let location = originalLocation;
+            if (originalLocation === "page_specific" && test.page_specific_url) {
               location = test.page_specific_url;
             }
   
@@ -120,7 +125,8 @@
               id: test.id,
               mode: testMode,
               forcedVariant,
-              location: location, // Use merchant-defined URL if page_specific
+              location: location,           // For page-specific, this is the actual URL.
+              originalLocation: originalLocation, // Preserve original value.
               device: test.device || 'both',
               testName: test.name || '',
               possibleNonZeroVariants: [...Array(test.variantsCount || 1)].map((_, i) => String(i + 1))
@@ -139,6 +145,7 @@
         console.group('Assigning variants for each group');
         const groupMap = {};
         this.allTests.forEach(t => {
+          // Group tests by their resolved location.
           const g = t.location;
           groupMap[g] = groupMap[g] || [];
           groupMap[g].push(t);
@@ -180,17 +187,29 @@
           return;
         }
   
-        // Get traffic allocation from config instead of Liquid settings
+        // Determine traffic allocation.
+        // For standard groups, use the global traffic config.
+        // For page-specific tests (where originalLocation === "page_specific"),
+        // use the traffic value from the global traffic config under the key "page_specific".
         const trafficConfig = this.settings.traffic || {};
-        const traffic = parseInt(trafficConfig[group] || '0', 10) || 0;
+        let traffic;
+        if (unforcedTests[0].originalLocation === "page_specific") {
+          traffic = parseInt(trafficConfig["page_specific"] || '0', 10) || 0;
+        } else {
+          const standardGroups = ['global', 'product', 'collection', 'cart', 'checkout'];
+          if (standardGroups.includes(group)) {
+            traffic = parseInt(trafficConfig[group] || '0', 10) || 0;
+          } else {
+            traffic = 0;
+          }
+        }
         const fraction = traffic / 100;
-  
-        console.log(`Group=${group}, fraction=${fraction}`);
+        console.log(`Group=${group}, traffic=${traffic}, fraction=${fraction}`);
         const rng = Math.random();
         console.log(`rng=${rng}, group=${group}`);
   
         if (rng >= fraction) {
-          // User not in experiment
+          // User not in experiment: assign control variant.
           unforcedTests.forEach(t => {
             const assignmentData = {
               variant: '0',
@@ -204,7 +223,7 @@
             this.setOrKeepAssignment(t, assignmentData);
           });
         } else {
-          // User in experiment
+          // User in experiment: choose one test to run a non-control variant.
           const chosenIndex = Math.floor(Math.random() * unforcedTests.length);
           unforcedTests.forEach((testObj, idx) => {
             if (idx === chosenIndex) {
@@ -258,11 +277,11 @@
         // Helper: extract a normalized path from a URL or a relative path.
         const getPath = (str) => {
           try {
-            // If str is a full URL, extract its pathname
+            // If str is a full URL, extract its pathname.
             let url = new URL(str);
             return url.pathname.replace(/\/+$/, '');
           } catch (e) {
-            // Otherwise, assume it's a relative path and ensure it starts with '/'
+            // Otherwise, ensure it starts with '/' and remove trailing slashes.
             if (!str.startsWith('/')) {
               str = '/' + str;
             }
@@ -270,11 +289,11 @@
           }
         };
   
-        // Get the current page's normalized path from window.location.href
+        // Get the current page's normalized path.
         const currentPath = getPath(window.location.href);
         console.log('Current normalized path:', currentPath);
   
-        // Determine current template/group from URL or data attribute
+        // Determine current template/group from URL or data attribute.
         let currentTemplate = document.body.getAttribute('data-template') ||
                               window.location.pathname.split('/')[1] || 'home';
   
@@ -288,12 +307,11 @@
   
         const mappedGroup = templateToGroup[currentTemplate] || 'home';
         const standardGroups = ['global', mappedGroup];
-  
         console.log('Standard groups for apply:', standardGroups);
   
         const assts = this.assignmentManager.getAllAssignments() || [];
         const toApply = assts.filter(a => {
-          // If the assignment's pageGroup is one of the standard groups, apply it
+          // If the assignment's pageGroup is one of the standard groups, apply it.
           if (standardGroups.includes(a.pageGroup)) {
             return true;
           }
