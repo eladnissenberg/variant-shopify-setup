@@ -47,7 +47,7 @@
         console.group('Setting up core');
         this.core = new TrackingCore();
         this.assignmentManager = new AssignmentManager();
-        
+  
         // Instead of Liquid settings, we'll use window.abTestingConfig
         this.settings = window.abTestingConfig || {};
         console.log('Settings loaded:', this.settings);
@@ -96,31 +96,37 @@
         try {
           // Get tests from window.abTestingConfig.tests instead of Liquid settings
           const tests = this.settings.tests || [];
-      
+  
           this.allTests = tests.map(test => {
             // Force modeValue to be a string to safely use startsWith()
             const modeValue = String(test.mode || 'test');
             let forcedVariant = null;
             let testMode = 'test';
-      
+  
             if (modeValue === 'test') {
               testMode = 'test';
             } else if (modeValue.startsWith('v')) {
               forcedVariant = modeValue.replace('v', '');
               testMode = 'forced';
             }
-      
+  
+            // Determine location; if it's page_specific and a specific URL is provided, use that URL instead.
+            let location = test.location || 'global';
+            if (location === 'page_specific' && test.page_specific_url) {
+              location = test.page_specific_url;
+            }
+  
             return {
               id: test.id,
               mode: testMode,
               forcedVariant,
-              location: test.location || 'global',
+              location: location, // Use merchant-defined URL if page_specific
               device: test.device || 'both',
               testName: test.name || '',
               possibleNonZeroVariants: [...Array(test.variantsCount || 1)].map((_, i) => String(i + 1))
             };
           });
-      
+  
           console.log('All tests from settings:', this.allTests);
         } catch (err) {
           console.error('Error loading tests:', err);
@@ -128,7 +134,6 @@
           console.groupEnd();
         }
       }
-      
   
       assignAllGroups() {
         console.group('Assigning variants for each group');
@@ -249,11 +254,14 @@
           console.groupEnd();
           return;
         }
-  
-        // Get current template from URL or data attribute instead of Liquid
-        const path = window.location.pathname;
-        let currentTemplate = document.body.getAttribute('data-template') || 
-                            path.split('/')[1] || 'home';
+        
+        // Normalize a path by removing trailing slashes
+        const normalizePath = (path) => path.replace(/\/+$/, '');
+        const currentPath = normalizePath(window.location.pathname);
+        
+        // Get current template from URL or data attribute
+        let currentTemplate = document.body.getAttribute('data-template') ||
+                              window.location.pathname.split('/')[1] || 'home';
   
         const templateToGroup = {
           product: 'product',
@@ -264,12 +272,19 @@
         };
   
         const mappedGroup = templateToGroup[currentTemplate] || 'home';
-        const relevantGroups = ['global', mappedGroup];
+        const standardGroups = ['global', mappedGroup];
   
-        console.log('Relevant groups for apply:', relevantGroups);
+        console.log('Standard groups for apply:', standardGroups);
   
         const assts = this.assignmentManager.getAllAssignments() || [];
-        const toApply = assts.filter(a => relevantGroups.includes(a.pageGroup));
+        const toApply = assts.filter(a => {
+          // If the assignment's pageGroup is a standard group, apply it
+          if (standardGroups.includes(a.pageGroup)) {
+            return true;
+          }
+          // Otherwise, assume it's a page specific URL and only apply if it matches the current path
+          return normalizePath(a.pageGroup) === currentPath;
+        });
         console.log('Assignments to apply:', toApply);
   
         const prefix = 'ab';
@@ -280,7 +295,9 @@
               `${prefix}-${a.testId}`,
               `${prefix}-${a.testId}-${a.variant}`
             );
-            document.body.classList.add(`${prefix}-${a.pageGroup}`);
+            // Ensure safe class name from pageGroup by replacing non-alphanumeric characters
+            const safePageGroup = a.pageGroup.replace(/[^a-zA-Z0-9-_]/g, '-');
+            document.body.classList.add(`${prefix}-${safePageGroup}`);
           } else {
             document.body.classList.add(`${prefix}-${a.testId}-0`);
           }
@@ -378,3 +395,4 @@
       initSystem();
     }
   })();
+  
