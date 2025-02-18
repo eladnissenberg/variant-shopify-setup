@@ -290,28 +290,32 @@
         };
       
         // Get the current page's normalized path.
-        const currentPath = getPath(window.location.href);
-        console.log('Current normalized path:', currentPath);
-      
-        // Determine the current template by inspecting the URL.
-        let currentTemplate = '';
-        if (currentPath.indexOf('/products/') === 0) {
-          currentTemplate = 'product';
-        } else if (currentPath.indexOf('/collections/') === 0) {
-          currentTemplate = 'collection';
-        } else if (currentPath.indexOf('/cart') === 0) {
-          currentTemplate = 'cart';
-        } else if (currentPath.indexOf('/checkout') === 0) {
-          currentTemplate = 'checkout';
-        } else {
-          // Fallback: use the data-template attribute or default to 'home'
-          currentTemplate = document.body.getAttribute('data-template') || 'home';
-        }
-      
-        // Build the standard groups array.
-        // Now that currentTemplate is normalized (e.g., "product" for /products/...), assignments with group "product" will be recognized.
-        const standardGroups = ['global', currentTemplate];
-        console.log('Standard groups for apply:', standardGroups);
+const currentPath = getPath(window.location.href);
+console.log('Current normalized path:', currentPath);
+
+// Determine current template/group.
+let currentTemplate = document.body.getAttribute('data-template');
+// If not set via a data attribute, determine it from the URL:
+if (!currentTemplate) {
+  if (currentPath === "/" || currentPath === "") {
+    currentTemplate = "homepage";  // explicitly set for home page
+  } else if (currentPath.indexOf('/products/') === 0) {
+    currentTemplate = 'product';
+  } else if (currentPath.indexOf('/collections/') === 0) {
+    currentTemplate = 'collection';
+  } else if (currentPath.indexOf('/cart') === 0) {
+    currentTemplate = 'cart';
+  } else if (currentPath.indexOf('/checkout') === 0) {
+    currentTemplate = 'checkout';
+  } else {
+    currentTemplate = currentPath.split('/')[1] || 'home';
+  }
+}
+console.log('Current template:', currentTemplate);
+
+const standardGroups = ['global', currentTemplate];
+console.log('Standard groups for apply:', standardGroups);
+
       
         // Get all valid assignments.
         const assts = this.assignmentManager.getAllAssignments() || [];
