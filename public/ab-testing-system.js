@@ -273,8 +273,8 @@
           console.groupEnd();
           return;
         }
-  
-        // Helper: extract a normalized path from a URL or a relative path.
+      
+        // Helper: extract a normalized path from a URL or relative path.
         const getPath = (str) => {
           try {
             // If str is a full URL, extract its pathname.
@@ -288,27 +288,32 @@
             return str.replace(/\/+$/, '');
           }
         };
-  
+      
         // Get the current page's normalized path.
         const currentPath = getPath(window.location.href);
         console.log('Current normalized path:', currentPath);
-  
-        // Determine current template/group from URL or data attribute.
-        let currentTemplate = document.body.getAttribute('data-template') ||
-                              window.location.pathname.split('/')[1] || 'home';
-  
-        const templateToGroup = {
-          product: 'product',
-          collection: 'collection',
-          cart: 'cart',
-          checkout: 'checkout',
-          index: 'home'
-        };
-  
-        const mappedGroup = templateToGroup[currentTemplate] || 'home';
-        const standardGroups = ['global', mappedGroup];
+      
+        // Determine the current template by inspecting the URL.
+        let currentTemplate = '';
+        if (currentPath.indexOf('/products/') === 0) {
+          currentTemplate = 'product';
+        } else if (currentPath.indexOf('/collections/') === 0) {
+          currentTemplate = 'collection';
+        } else if (currentPath.indexOf('/cart') === 0) {
+          currentTemplate = 'cart';
+        } else if (currentPath.indexOf('/checkout') === 0) {
+          currentTemplate = 'checkout';
+        } else {
+          // Fallback: use the data-template attribute or default to 'home'
+          currentTemplate = document.body.getAttribute('data-template') || 'home';
+        }
+      
+        // Build the standard groups array.
+        // Now that currentTemplate is normalized (e.g., "product" for /products/...), assignments with group "product" will be recognized.
+        const standardGroups = ['global', currentTemplate];
         console.log('Standard groups for apply:', standardGroups);
-  
+      
+        // Get all valid assignments.
         const assts = this.assignmentManager.getAllAssignments() || [];
         const toApply = assts.filter(a => {
           // If the assignment's pageGroup is one of the standard groups, apply it.
@@ -319,7 +324,7 @@
           return getPath(a.pageGroup) === currentPath;
         });
         console.log('Assignments to apply:', toApply);
-  
+      
         const prefix = 'ab';
         toApply.forEach(a => {
           if (a.variant !== '0') {
@@ -335,9 +340,10 @@
             document.body.classList.add(`${prefix}-${a.testId}-0`);
           }
         });
-  
+      
         console.groupEnd();
       }
+      
   
       async trackTestAssignments() {
         console.group('Tracking Test Assignments');
