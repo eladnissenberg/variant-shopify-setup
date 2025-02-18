@@ -254,12 +254,27 @@
           console.groupEnd();
           return;
         }
-        
-        // Normalize a path by removing trailing slashes
-        const normalizePath = (path) => path.replace(/\/+$/, '');
-        const currentPath = normalizePath(window.location.pathname);
-        
-        // Get current template from URL or data attribute
+  
+        // Helper: extract a normalized path from a URL or a relative path.
+        const getPath = (str) => {
+          try {
+            // If str is a full URL, extract its pathname
+            let url = new URL(str);
+            return url.pathname.replace(/\/+$/, '');
+          } catch (e) {
+            // Otherwise, assume it's a relative path and ensure it starts with '/'
+            if (!str.startsWith('/')) {
+              str = '/' + str;
+            }
+            return str.replace(/\/+$/, '');
+          }
+        };
+  
+        // Get the current page's normalized path from window.location.href
+        const currentPath = getPath(window.location.href);
+        console.log('Current normalized path:', currentPath);
+  
+        // Determine current template/group from URL or data attribute
         let currentTemplate = document.body.getAttribute('data-template') ||
                               window.location.pathname.split('/')[1] || 'home';
   
@@ -278,12 +293,12 @@
   
         const assts = this.assignmentManager.getAllAssignments() || [];
         const toApply = assts.filter(a => {
-          // If the assignment's pageGroup is a standard group, apply it
+          // If the assignment's pageGroup is one of the standard groups, apply it
           if (standardGroups.includes(a.pageGroup)) {
             return true;
           }
-          // Otherwise, assume it's a page specific URL and only apply if it matches the current path
-          return normalizePath(a.pageGroup) === currentPath;
+          // Otherwise, treat it as a page-specific URL and compare normalized paths.
+          return getPath(a.pageGroup) === currentPath;
         });
         console.log('Assignments to apply:', toApply);
   
@@ -295,7 +310,7 @@
               `${prefix}-${a.testId}`,
               `${prefix}-${a.testId}-${a.variant}`
             );
-            // Ensure safe class name from pageGroup by replacing non-alphanumeric characters
+            // Create a safe class name from pageGroup by replacing non-alphanumeric characters.
             const safePageGroup = a.pageGroup.replace(/[^a-zA-Z0-9-_]/g, '-');
             document.body.classList.add(`${prefix}-${safePageGroup}`);
           } else {
