@@ -196,7 +196,7 @@
       if (unforcedTests[0].originalLocation === 'page_specific') {
         traffic = parseInt(trafficConfig['page_specific'] || '0', 10) || 0;
       } else {
-        const standardGroups = ['global', 'product', 'collection', 'cart', 'checkout'];
+        const standardGroups = ['global', 'homepage', 'product', 'collection', 'cart', 'checkout'];
         if (standardGroups.includes(group)) {
           traffic = parseInt(trafficConfig[group] || '0', 10) || 0;
         } else {
