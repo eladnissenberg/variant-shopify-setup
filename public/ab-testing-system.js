@@ -129,7 +129,9 @@
             location,
             originalLocation,
             device: test.device || 'both',
-            testName: test.name || '',
+            // Use the explicit test name from the new field.
+            // If test.name is not provided, look up the global property keyed by test.id+"_name".
+            testName: test.name || window.abTestingConfig[test.id + "_name"] || '',
             possibleNonZeroVariants: [...Array(test.variantsCount || 1)].map((_, i) => String(i + 1))
           };
         });
@@ -142,6 +144,8 @@
       }
     }
 
+    // ... (the rest of the code remains unchanged)
+    
     assignAllGroups() {
       console.group('Assigning variants for each group');
       const groupMap = {};
