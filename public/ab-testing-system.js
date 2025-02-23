@@ -144,8 +144,6 @@
       }
     }
 
-    // ... (the rest of the code remains unchanged)
-    
     assignAllGroups() {
       console.group('Assigning variants for each group');
       const groupMap = {};
@@ -352,11 +350,10 @@
             `${prefix}-${a.testId}`,
             `${prefix}-${a.testId}-${a.variant}`
           );
-          // Create a safe class name from pageGroup by replacing non-alphanumeric characters.
-          const safePageGroup = a.pageGroup.replace(/[^a-zA-Z0-9-_]/g, '-');
-          document.body.classList.add(`${prefix}-${safePageGroup}`);
+          a.exposed = true; // Mark as exposed
         } else {
           document.body.classList.add(`${prefix}-${a.testId}-0`);
+          a.exposed = false; // Not exposed
         }
       });
 
@@ -373,6 +370,9 @@
         console.log('Tracking assignments:', assts);
 
         for (const a of assts) {
+          // Use the exposed flag from the assignment
+          let exposed = a.exposed || false;
+
           await window.postgresReporter.trackAssignment({
             testId: a.testId,
             variant: a.variant,
@@ -380,19 +380,10 @@
             assignmentMode: a.mode,
             pageGroup: a.pageGroup,
             userId: this.userId,
-            name: a.name,
+            name: a.testName || '',
             assigned_variant: a.assigned_variant,
-            tested_variant: a.tested_variant
-          });
-
-          // Push to dataLayer if available
-          window.dataLayer = window.dataLayer || [];
-          window.dataLayer.push({
-            abTest: {
-              testId: a.testId,
-              variant: a.variant,
-              mode: a.mode
-            }
+            tested_variant: a.tested_variant,
+            exposed // new flag indicating if the user was really exposed
           });
         }
         console.log('Test assignments tracked successfully');
