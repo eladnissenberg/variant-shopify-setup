@@ -47,8 +47,7 @@
       console.group('Setting up core');
       this.core = new TrackingCore();
       this.assignmentManager = new AssignmentManager();
-      // Instead of iterating over all Liquid settings,
-      // we use window.abTestingConfig (populated by our Liquid snippet)
+      // Use window.abTestingConfig (populated by our Liquid snippet)
       this.settings = window.abTestingConfig || {};
       console.log('Settings loaded:', this.settings);
       console.groupEnd();
@@ -69,12 +68,19 @@
       try {
         // Clean up old assignments
         this.assignmentManager.cleanup();
+
         // 1) Gather tests from settings
         await this.loadActiveTestsFromSettings();
+
         // 2) Assign variants
         this.assignAllGroups();
-        // 3) Apply classes to <body>
+
+        // 3) Apply classes to <body> and mark experiments as exposed
         this.applyAssignments();
+
+        // Persist the updated assignments (including exposed field)
+        this.assignmentManager.persist();
+
         // 4) Track them
         await this.trackTestAssignments();
         return true;
@@ -91,6 +97,7 @@
       try {
         // Get tests from window.abTestingConfig.tests (populated by Liquid)
         const tests = this.settings.tests || [];
+
         // Map each test into a standardized object.
         // For page-specific tests, if a URL is provided, we use that as the location.
         this.allTests = tests.map(test => {
@@ -128,6 +135,7 @@
             possibleNonZeroVariants: [...Array(test.variantsCount || 1)].map((_, i) => String(i + 1))
           };
         });
+
         console.log('All tests from settings:', this.allTests);
       } catch (err) {
         console.error('Error loading tests:', err);
@@ -255,7 +263,7 @@
       console.groupEnd();
     }
 
-    // UPDATED: Check for an existing valid assignment before setting a new one.
+    // Check for an existing valid assignment before setting a new one.
     setOrKeepAssignment(testObj, data) {
       console.group(`Setting/Updating Assignment for ${testObj.id}`);
       const existingAssignment = this.assignmentManager.getAssignment(testObj.id);
@@ -267,7 +275,7 @@
       console.groupEnd();
     }
 
-    // UPDATED: Apply assignments and mark them as exposed when the class is added.
+    // Apply assignments and mark them as exposed when the class is added.
     applyAssignments() {
       console.group('Applying Assignments');
       if (!document.body) {
@@ -276,12 +284,8 @@
         return;
       }
 
-      // Use Shopify's native template information if available.
-      // Ensure your theme's <body> tag includes a data-template attribute, e.g.:
-      // <body data-template="{{ template.name }}">
       let currentTemplate = document.body.getAttribute('data-template');
 
-      // Fallback logic if data-template is not set.
       const getPath = (str) => {
         try {
           let url = new URL(str);
@@ -303,8 +307,6 @@
         } else if (currentPath.indexOf('/products/') === 0) {
           currentTemplate = 'product';
         } else if (currentPath.indexOf('/collections/') === 0) {
-          // Updated logic: if URL starts with '/collections/' and also contains '/products/',
-          // then treat it as a product page.
           if (currentPath.indexOf('/products/') !== -1) {
             currentTemplate = 'product';
           } else {
@@ -326,19 +328,17 @@
       // Get all valid assignments.
       const assts = this.assignmentManager.getAllAssignments() || [];
       const toApply = assts.filter(a => {
-        // If the assignment's pageGroup is one of the standard groups, apply it.
         if (standardGroups.includes(a.pageGroup)) {
           return true;
         }
-        // Otherwise, compare normalized paths for page-specific tests.
         return getPath(a.pageGroup) === currentPath;
       });
       console.log('Assignments to apply:', toApply);
 
       const prefix = 'ab';
-      // For every assignment that is applied, add the corresponding body class and mark as exposed.
+      // For every assignment that is applied, add the corresponding body class
+      // and mark as exposed (set exposed=true for all, regardless of variant value).
       toApply.forEach(a => {
-        // Add the class regardless of variant value (control or test)
         if (a.variant !== '0') {
           document.body.classList.add(
             `${prefix}-active`,
@@ -348,7 +348,7 @@
         } else {
           document.body.classList.add(`${prefix}-${a.testId}-0`);
         }
-        // Set exposed to true regardless of variant
+        // Mark assignment as exposed.
         a.exposed = true;
       });
 
