@@ -47,7 +47,6 @@
       console.group('Setting up core');
       this.core = new TrackingCore();
       this.assignmentManager = new AssignmentManager();
-
       // Instead of iterating over all Liquid settings,
       // we use window.abTestingConfig (populated by our Liquid snippet)
       this.settings = window.abTestingConfig || {};
@@ -70,19 +69,14 @@
       try {
         // Clean up old assignments
         this.assignmentManager.cleanup();
-
         // 1) Gather tests from settings
         await this.loadActiveTestsFromSettings();
-
         // 2) Assign variants
         this.assignAllGroups();
-
         // 3) Apply classes to <body>
         this.applyAssignments();
-
         // 4) Track them
         await this.trackTestAssignments();
-
         return true;
       } catch (err) {
         console.error('Failed to initialize:', err);
@@ -97,7 +91,6 @@
       try {
         // Get tests from window.abTestingConfig.tests (populated by Liquid)
         const tests = this.settings.tests || [];
-
         // Map each test into a standardized object.
         // For page-specific tests, if a URL is provided, we use that as the location.
         this.allTests = tests.map(test => {
@@ -135,7 +128,6 @@
             possibleNonZeroVariants: [...Array(test.variantsCount || 1)].map((_, i) => String(i + 1))
           };
         });
-
         console.log('All tests from settings:', this.allTests);
       } catch (err) {
         console.error('Error loading tests:', err);
@@ -275,6 +267,7 @@
       console.groupEnd();
     }
 
+    // UPDATED: Apply assignments and mark them as exposed when the class is added.
     applyAssignments() {
       console.group('Applying Assignments');
       if (!document.body) {
@@ -343,18 +336,20 @@
       console.log('Assignments to apply:', toApply);
 
       const prefix = 'ab';
+      // For every assignment that is applied, add the corresponding body class and mark as exposed.
       toApply.forEach(a => {
+        // Add the class regardless of variant value (control or test)
         if (a.variant !== '0') {
           document.body.classList.add(
             `${prefix}-active`,
             `${prefix}-${a.testId}`,
             `${prefix}-${a.testId}-${a.variant}`
           );
-          a.exposed = true; // Mark as exposed
         } else {
           document.body.classList.add(`${prefix}-${a.testId}-0`);
-          a.exposed = false; // Not exposed
         }
+        // Set exposed to true regardless of variant
+        a.exposed = true;
       });
 
       console.groupEnd();
@@ -370,9 +365,6 @@
         console.log('Tracking assignments:', assts);
 
         for (const a of assts) {
-          // Use the exposed flag from the assignment
-          let exposed = a.exposed || false;
-
           await window.postgresReporter.trackAssignment({
             testId: a.testId,
             variant: a.variant,
@@ -383,7 +375,7 @@
             name: a.testName || '',
             assigned_variant: a.assigned_variant,
             tested_variant: a.tested_variant,
-            exposed // new flag indicating if the user was really exposed
+            exposed: a.exposed
           });
         }
         console.log('Test assignments tracked successfully');
@@ -437,7 +429,6 @@
     }
   };
 
-  // Initialize if abTestingConfig is enabled
   if (window.abTestingConfig?.enabled) {
     console.log('Starting AB Testing System initialization');
     initSystem();
