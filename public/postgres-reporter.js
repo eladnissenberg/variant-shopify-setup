@@ -1,4 +1,4 @@
-/* PostgreSQL Reporter 
+/* PostgreSQL Reporter
    Queues events in localStorage, deduplicates impressions, etc.
    Dependencies: TrackingCore, AssignmentManager */
 
@@ -9,7 +9,7 @@
     }
   
     class RateLimiter {
-      constructor(maxRequests=50, timeWindow=60000) {
+      constructor(maxRequests = 50, timeWindow = 60000) {
         this.maxRequests = maxRequests;
         this.timeWindow = timeWindow;
         this.requests = [];
@@ -29,7 +29,7 @@
     }
   
     class EventDeduplicator {
-      constructor(expiryTime=30*60*1000) {
+      constructor(expiryTime = 30 * 60 * 1000) {
         this.processedEvents = new Map();
         this.EXPIRY_TIME = expiryTime;
       }
@@ -83,7 +83,7 @@
             }
             localStorage.removeItem(this.STORAGE_KEY);
           }
-        } catch(err) {
+        } catch (err) {
           console.error('Failed to load queue:', err);
         }
       }
@@ -92,7 +92,7 @@
         if (this.queue.length > 0) {
           try {
             localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.queue));
-          } catch(err) {
+          } catch (err) {
             console.error('Failed to persist queue:', err);
           }
         }
@@ -102,7 +102,7 @@
         this.queue.push(evt);
       }
   
-      getBatch(size=10) {
+      getBatch(size = 10) {
         return this.queue.slice(0, size);
       }
   
@@ -116,7 +116,7 @@
     }
   
     class PostgresReporter {
-      constructor(config={}) {
+      constructor(config = {}) {
         console.group('Initializing PostgreSQL Reporter');
         if (PostgresReporter.instance) {
           console.log('Returning existing instance');
@@ -132,7 +132,7 @@
           this.setupCleanupTasks();
           PostgresReporter.instance = this;
           console.log('PostgreSQL Reporter initialized successfully');
-        } catch(err) {
+        } catch (err) {
           console.error('Failed to init PostgreSQL Reporter:', err);
           throw err;
         } finally {
@@ -170,7 +170,7 @@
           batchSize: config.batchSize || 10,
           maxConsecutiveFailures: config.maxConsecutiveFailures || 3
         };
-        
+  
         this.shopDomain = window.Shopify?.shop || window.location.hostname;
         this.core = new TrackingCore();
         this.assignmentManager = new AssignmentManager();
@@ -203,7 +203,7 @@
             await this.sendEvents(batch);
             this.queueManager.removeBatch(batch.length);
             this.failedAttempts = 0;
-          } catch(err) {
+          } catch (err) {
             this.failedAttempts++;
             console.error('Failed to process event batch:', err);
           } finally {
@@ -238,7 +238,8 @@
         userId,
         name,
         assigned_variant,
-        tested_variant
+        tested_variant,
+        exposed // new parameter
       }) {
         console.group(`Tracking Assignment: ${testId}`);
         console.log('Assignment data:', {
@@ -250,7 +251,8 @@
           userId,
           name,
           assigned_variant,
-          tested_variant
+          tested_variant,
+          exposed
         });
   
         try {
@@ -276,7 +278,8 @@
             userId: finalUserId,
             name: name || '',
             tested_variant: tested_variant || null,
-            assigned_variant: assigned_variant || variant
+            assigned_variant: assigned_variant || variant,
+            exposed: exposed || false
           };
   
           const asg = new TestAssignment(testId, asgData);
@@ -292,13 +295,14 @@
             shop_domain: this.shopDomain,
             experiment_name: asg.name || '',
             assigned_variant: assigned_variant || variant,
-            tested_variant: tested_variant || null
+            tested_variant: tested_variant || null,
+            exposed: exposed || false
           });
   
           await this.queueEvent(event);
           await this._trackImpression(asg, tested_variant, assigned_variant);
           console.log('Assignment tracked successfully');
-        } catch(err) {
+        } catch (err) {
           console.error('Failed to track assignment:', err);
           throw err;
         } finally {
@@ -327,7 +331,7 @@
           await this.queueEvent(evt);
           this.deduplicator.markProcessed(evt);
           console.log('Impression tracked');
-        } catch(err) {
+        } catch (err) {
           console.error('Failed to track impression:', err);
           throw err;
         } finally {
@@ -355,7 +359,7 @@
           await this.queueEvent(evt);
           this.deduplicator.markProcessed(evt);
           console.log('Impression tracked');
-        } catch(err) {
+        } catch (err) {
           console.error('Failed to track impression:', err);
           throw err;
         } finally {
@@ -379,7 +383,8 @@
               type: a.type,
               mode: a.mode,
               group: a.pageGroup,
-              name: a.name
+              name: a.name,
+              exposed: a.exposed || false
             };
           });
   
@@ -406,7 +411,7 @@
   
           console.log('Final event payload:', payload);
           return payload;
-        } catch(err) {
+        } catch (err) {
           console.error('Failed createEventPayload:', err);
           throw err;
         } finally {
@@ -431,7 +436,7 @@
           await this.rateLimiter.checkLimit();
           this.queueManager.add(evt);
           console.log('Event queued:', evt);
-        } catch(err) {
+        } catch (err) {
           console.error('Failed to queue event:', err);
           throw err;
         } finally {
@@ -451,92 +456,91 @@
           console.log('Sending to endpoint:', this.config.apiEndpoint);
   
           const shopId = window.Shopify?.shop || window.location.hostname;
-            const r = await this.core.withRetry(async () => {
-              const r = await fetch(this.config.apiEndpoint, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'X-API-Key': this.config.apiKey,
-                  'x-shop-id': shopId  // Use 'x-shop-id' instead of 'shop_id'
-                },
-                
-                mode: 'cors',
-                credentials: 'omit',
-                body: JSON.stringify(events)
-              });
-
-              if (!r.ok) {
-                const errorText = await r.text();
-                console.error('API Error Response:', errorText);
-                throw new Error(`HTTP error: ${r.status}`);
-              }
-              return r.json();
-            }, {
-              maxRetries: this.config.retryAttempts,
-              baseDelay: this.config.retryDelay
+          const resp = await this.core.withRetry(async () => {
+            const r = await fetch(this.config.apiEndpoint, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-API-Key': this.config.apiKey,
+                'x-shop-id': shopId
+              },
+              mode: 'cors',
+              credentials: 'omit',
+              body: JSON.stringify(events)
             });
-
+  
+            if (!r.ok) {
+              const errorText = await r.text();
+              console.error('API Error Response:', errorText);
+              throw new Error(`HTTP error: ${r.status}`);
+            }
+            return r.json();
+          }, {
+            maxRetries: this.config.retryAttempts,
+            baseDelay: this.config.retryDelay
+          });
+  
           console.log('Events sent:', resp);
           return resp;
-        } catch(err) {
+        } catch (err) {
           console.error('Failed to send events:', err);
           throw err;
         } finally {
           console.groupEnd();
         }
       }
-
-
-    static initialize(config) {
-      console.group('Initializing PostgreSQL Reporter');
-      try {
-        if (!window.postgresReporter) {
-          window.postgresReporter = new PostgresReporter(config);
-          console.log('New PostgreSQL Reporter instance created');
+  
+      static initialize(config) {
+        console.group('Initializing PostgreSQL Reporter');
+        try {
+          if (!window.postgresReporter) {
+            window.postgresReporter = new PostgresReporter(config);
+            console.log('New PostgreSQL Reporter instance created');
+            return window.postgresReporter;
+          }
+          console.log('Returning existing instance');
           return window.postgresReporter;
+        } catch (err) {
+          console.error('Failed to init PostgreSQL Reporter:', err);
+          throw err;
+        } finally {
+          console.groupEnd();
         }
-        console.log('Returning existing instance');
+      }
+  
+      static getInstance() {
+        if (!window.postgresReporter) {
+          throw new Error('PostgreSQL Reporter not initialized');
+        }
         return window.postgresReporter;
-      } catch(err) {
-        console.error('Failed to init PostgreSQL Reporter:', err);
-        throw err;
-      } finally {
-        console.groupEnd();
       }
     }
-
-    static getInstance() {
-      if (!window.postgresReporter) {
-        throw new Error('PostgreSQL Reporter not initialized');
+  
+    window.PostgresReporter = PostgresReporter;
+  
+    try {
+      console.group('Initializing PostgreSQL Reporter Instance');
+      const deps = ['TrackingCore', 'AssignmentManager', 'TestAssignment'];
+      const missing = deps.filter(d => typeof window[d] === 'undefined');
+      if (missing.length > 0) {
+        throw new Error('Missing dependencies: ' + missing.join(', '));
       }
-      return window.postgresReporter;
+  
+      const config = {
+        apiEndpoint: window.abTestingConfig?.apiEndpoint || "https://sessions-db-api.vercel.app/api/events",
+        apiKey: window.abTestingConfig?.apiKey || "your-api-key",
+        retryAttempts: 3,
+        retryDelay: 1000,
+        batchSize: 10,
+        maxConsecutiveFailures: 3
+      };
+  
+      PostgresReporter.initialize(config);
+      console.log('PostgreSQL Reporter initialized:', config);
+    } catch (err) {
+      console.error('Failed to init PostgreSQL Reporter:', err);
+    } finally {
+      console.groupEnd();
     }
-  }
-
-  window.PostgresReporter = PostgresReporter;
-
-  try {
-    console.group('Initializing PostgreSQL Reporter Instance');
-    const deps = ['TrackingCore', 'AssignmentManager', 'TestAssignment'];
-    const missing = deps.filter(d => typeof window[d] === 'undefined');
-    if (missing.length > 0) {
-      throw new Error('Missing dependencies: ' + missing.join(', '));
-    }
-
-    const config = {
-      apiEndpoint: window.abTestingConfig?.apiEndpoint || "https://sessions-db-api.vercel.app/api/events",
-      apiKey: window.abTestingConfig?.apiKey || "your-api-key",
-      retryAttempts: 3,
-      retryDelay: 1000,
-      batchSize: 10,
-      maxConsecutiveFailures: 3
-    };
-
-    PostgresReporter.initialize(config);
-    console.log('PostgreSQL Reporter initialized:', config);
-  } catch(err) {
-    console.error('Failed to init PostgreSQL Reporter:', err);
-  } finally {
-    console.groupEnd();
-  }
-})();
+  })();
+  

@@ -21,6 +21,8 @@
           this.name = data.name || '';
           this.tested_variant = data.tested_variant !== undefined ? data.tested_variant : null;
           this.assigned_variant = data.assigned_variant || this.variant;
+          // Set the exposed flag if provided (default false)
+          this.exposed = data.exposed || false;
   
           console.log('Created assignment:', this.toStorageFormat());
         } catch (err) {
@@ -63,7 +65,8 @@
           mode: this.mode,
           pageGroup: this.pageGroup,
           timestamp: this.timestamp,
-          name: this.name
+          name: this.name,
+          exposed: this.exposed || false
         };
       }
   
@@ -76,7 +79,8 @@
           group: this.pageGroup,
           name: this.name,
           tested_variant: this.tested_variant,
-          assigned_variant: this.assigned_variant
+          assigned_variant: this.assigned_variant,
+          exposed: this.exposed || false
         };
       }
   
@@ -91,6 +95,7 @@
           asg.name = data.name ? data.name : '';
           asg.tested_variant = data.tested_variant !== undefined ? data.tested_variant : null;
           asg.assigned_variant = data.assigned_variant || data.variant;
+          asg.exposed = data.exposed || false;
           console.log('Created assignment from storage:', asg);
           return asg;
         } catch (err) {
@@ -300,3 +305,4 @@
       console.error('Failed to initialize shared Assignment Manager:', err);
     }
   })();
+  
