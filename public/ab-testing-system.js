@@ -75,14 +75,10 @@
         // 2) Assign variants
         this.assignAllGroups();
 
-        // 3) Apply classes to <body> and mark experiments as exposed
+        // 3) Immediately apply body classes without delay.
         this.applyAssignments();
 
-        // Persist the updated assignments (including exposed field)
-        this.assignmentManager.persist();
-
-        // 4) Track exposure events for assignments using dedicated exposure tracking
-        await this.trackExposureEvents();
+        // Return success immediately—the update of the "exposed" field will happen via a scheduled task.
         return true;
       } catch (err) {
         console.error('Failed to initialize:', err);
@@ -275,7 +271,8 @@
       console.groupEnd();
     }
 
-    // Apply assignments and mark them as exposed when the class is added.
+    // Immediately apply body classes; then, after a short delay,
+    // update the exposed flag, persist assignments, and track exposures.
     applyAssignments() {
       console.group('Applying Assignments');
       if (!document.body) {
@@ -336,8 +333,7 @@
       console.log('Assignments to apply:', toApply);
 
       const prefix = 'ab';
-      // For every assignment that is applied, add the corresponding body class
-      // and mark as exposed (set exposed=true for all, regardless of variant value).
+      // Immediately add the corresponding body classes.
       toApply.forEach(a => {
         if (a.variant !== '0') {
           document.body.classList.add(
@@ -348,11 +344,18 @@
         } else {
           document.body.classList.add(`${prefix}-${a.testId}-0`);
         }
-        // Mark assignment as exposed.
-        a.exposed = true;
       });
-
       console.groupEnd();
+
+      // Delay updating the exposed flag (and subsequent persistence and tracking)
+      // so that the DOM update is complete before we mark assignments as "exposed".
+      setTimeout(() => {
+        toApply.forEach(a => {
+          a.exposed = true;
+        });
+        this.assignmentManager.persist();
+        this.trackExposureEvents();
+      }, 100);
     }
 
     // Dedicated function to track exposure events separate from assignment creation.
