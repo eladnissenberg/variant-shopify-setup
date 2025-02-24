@@ -240,7 +240,7 @@
       console.groupEnd();
     }
 
-    // In applyAssignments we now only add body classes and persist assignments.
+    // Immediately add body classes and then persist assignments.
     applyAssignments() {
       console.group('Applying Assignments');
       if (!document.body) {
@@ -362,16 +362,55 @@
       const mgr = new ABTestManager();
       const ok = await mgr.initialize();
       console.log('AB Testing init complete:', { success: ok });
-      // Separate exposure event triggering on window load.
+      // After the page loads, wait 2 seconds and then:
       window.addEventListener('load', () => {
         setTimeout(() => {
+          // First, track exposures as before.
           mgr.trackExposureEvents().then(() => {
-            console.log('Exposure events tracked on window load; dispatching "abTestingReady" event.');
-            document.dispatchEvent(new CustomEvent("abTestingReady"));
+            console.log('Exposure events tracked on window load.');
           }).catch(err => {
             console.error('Error tracking exposure events on window load:', err);
           });
-        }, 200);
+          // Now, inspect the body for AB test classes.
+          const testPattern = /^ab-([A-Za-z0-9]+)-(\d+)$/;
+          const exposedTests = [];
+          document.body.classList.forEach(cls => {
+            const match = cls.match(testPattern);
+            if (match) {
+              exposedTests.push({ testId: match[1], variant: match[2] });
+            }
+          });
+          if (exposedTests.length > 0) {
+            // Create a separate summary event payload.
+            const core = new TrackingCore();
+            const ids = core.getTrackingIds();
+            const payload = {
+              type: 'test_exposure_summary',
+              data: {
+                session_id: ids.sessionId,
+                user_id: ids.userId,
+                event_name: 'test_exposure_summary',
+                event_type: 'test_exposure_summary',
+                client_timestamp: new Date().toISOString(),
+                timezone_offset: new Date().getTimezoneOffset(),
+                event_data: {
+                  exposedTests: exposedTests
+                }
+              }
+            };
+            if (window.postgresReporter && typeof window.postgresReporter.queueEvent === 'function') {
+              window.postgresReporter.queueEvent(payload);
+              console.log('Queued test exposure summary event:', payload);
+            } else {
+              console.warn('PostgresReporter not available to queue test exposure summary event.');
+            }
+          } else {
+            console.log('No test exposure classes found in body.');
+          }
+          // Finally, dispatch the "abTestingReady" event.
+          console.log('Dispatching "abTestingReady" event.');
+          document.dispatchEvent(new CustomEvent("abTestingReady"));
+        }, 2000); // 2-second delay after page load
       });
     } catch (err) {
       console.error('Failed to init AB Testing System:', err);
