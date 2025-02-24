@@ -1,13 +1,11 @@
 // AB Testing System
 (() => {
-  if (window.ABTestManager) {
-    console.warn('AB Testing already loaded');
-    return;
-  }
-
-  // Create a global promise that resolves when exposure tracking is complete.
+  // Create a global promise that will be resolved once exposure tracking is complete.
+  // This promise is created as soon as this file is executed.
   if (!window.abExposurePromise) {
-    window.abExposurePromise = new Promise((resolve) => { window._resolveAbExposure = resolve; });
+    window.abExposurePromise = new Promise((resolve) => {
+      window._resolveAbExposure = resolve;
+    });
   }
 
   // Check dependencies
@@ -52,7 +50,7 @@
       console.group('Setting up core');
       this.core = new TrackingCore();
       this.assignmentManager = new AssignmentManager();
-      // Use window.abTestingConfig (populated by our Liquid snippet)
+      // Use the configuration injected into window.abTestingConfig via Liquid.
       this.settings = window.abTestingConfig || {};
       console.log('Settings loaded:', this.settings);
       console.groupEnd();
@@ -71,20 +69,44 @@
     async initialize() {
       console.group('Initializing Test System');
       try {
-        // Clean up old assignments
+        // Clean up any expired assignments.
         this.assignmentManager.cleanup();
 
-        // 1) Gather tests from settings
+        // 1) Load tests from configuration.
         await this.loadActiveTestsFromSettings();
 
-        // 2) Assign variants
+        // 2) Group tests and assign variants.
         this.assignAllGroups();
 
-        // 3) Immediately apply body classes
+        // 3) Immediately add body classes.
         this.applyAssignments();
 
-        // Return success immediately; note that exposure updating and tracking happens
-        // asynchronously but will resolve our global promise before any reporting payload is built.
+        // In a short timeout (100ms), update the "exposed" flag for each experiment
+        // that was applied (regardless of its variant), persist the assignments, and track exposure events.
+        setTimeout(() => {
+          // Only update "exposed" to true for experiments that had their body class added.
+          // (Regardless of whether variant is "0" or not.)
+          const toUpdate = this.assignmentManager.getAllAssignments().filter(a => {
+            // Only update if this assignment was applied on this page.
+            // You can verify this by checking if its testId appears in the body class.
+            // For simplicity, we use the same "toApply" logic as in applyAssignments().
+            const prefix = 'ab';
+            const className = (a.variant !== '0') 
+              ? `${prefix}-${a.testId}-${a.variant}` 
+              : `${prefix}-${a.testId}-0`;
+            return document.body.classList.contains(className);
+          });
+          toUpdate.forEach(a => { a.exposed = true; });
+          this.assignmentManager.persist();
+          this.trackExposureEvents().then(() => {
+            console.log('Exposure events tracked; resolving abExposurePromise.');
+            if (window._resolveAbExposure) {
+              window._resolveAbExposure();
+              window._resolveAbExposure = null;
+            }
+          });
+        }, 100);
+
         return true;
       } catch (err) {
         console.error('Failed to initialize:', err);
@@ -97,13 +119,8 @@
     loadActiveTestsFromSettings() {
       console.group('Loading Tests from Settings');
       try {
-        // Get tests from window.abTestingConfig.tests (populated by Liquid)
         const tests = this.settings.tests || [];
-
-        // Map each test into a standardized object.
-        // For page-specific tests, if a URL is provided, we use that as the location.
         this.allTests = tests.map(test => {
-          // Force modeValue to be a string so we can use startsWith()
           const modeValue = String(test.mode || 'test');
           let forcedVariant = null;
           let testMode = 'test';
@@ -115,11 +132,8 @@
             testMode = 'forced';
           }
 
-          // Save the original location (could be "global", "homepage", etc. or "page_specific")
           let originalLocation = test.location || 'global';
           let location = originalLocation;
-
-          // For page-specific tests, if a URL is provided, override location with that URL.
           if (originalLocation === 'page_specific' && test.page_specific_url) {
             location = test.page_specific_url;
           }
@@ -131,13 +145,10 @@
             location,
             originalLocation,
             device: test.device || 'both',
-            // Use the explicit test name from the new field.
-            // If test.name is not provided, look up the global property keyed by test.id+"_name".
             testName: test.name || window.abTestingConfig[test.id + "_name"] || '',
             possibleNonZeroVariants: [...Array(test.variantsCount || 1)].map((_, i) => String(i + 1))
           };
         });
-
         console.log('All tests from settings:', this.allTests);
       } catch (err) {
         console.error('Error loading tests:', err);
@@ -150,7 +161,6 @@
       console.group('Assigning variants for each group');
       const groupMap = {};
       this.allTests.forEach(t => {
-        // Group tests by their resolved location.
         const g = t.location;
         groupMap[g] = groupMap[g] || [];
         groupMap[g].push(t);
@@ -160,17 +170,14 @@
         const testsInGroup = groupMap[group];
         this.assignGroup(group, testsInGroup);
       });
-
       console.groupEnd();
     }
 
     assignGroup(group, tests) {
       console.group(`Assigning group="${group}":`, tests);
-
       const forcedTests = tests.filter(t => t.mode === 'forced');
       const unforcedTests = tests.filter(t => t.mode === 'test');
 
-      // 1) Handle forced tests
       forcedTests.forEach(ft => {
         const forcedVar = ft.forcedVariant || '0';
         const assignmentData = {
@@ -185,16 +192,12 @@
         this.setOrKeepAssignment(ft, assignmentData);
       });
 
-      // 2) Handle unforced tests
       if (unforcedTests.length === 0) {
         console.log(`No unforced tests for group=${group}`);
         console.groupEnd();
         return;
       }
 
-      // Determine traffic allocation.
-      // For page-specific tests, use "page_specific" traffic.
-      // Otherwise, check the group name in the traffic config.
       const trafficConfig = this.settings.traffic || {};
       let traffic;
       if (unforcedTests[0].originalLocation === 'page_specific') {
@@ -207,14 +210,12 @@
           traffic = 0;
         }
       }
-
       const fraction = traffic / 100;
       console.log(`Group=${group}, traffic=${traffic}, fraction=${fraction}`);
       const rng = Math.random();
       console.log(`rng=${rng}, group=${group}`);
 
       if (rng >= fraction) {
-        // User not in experiment: assign control variant.
         unforcedTests.forEach(t => {
           const assignmentData = {
             variant: '0',
@@ -228,7 +229,6 @@
           this.setOrKeepAssignment(t, assignmentData);
         });
       } else {
-        // User in experiment: choose one test to run a non-control variant.
         const chosenIndex = Math.floor(Math.random() * unforcedTests.length);
         unforcedTests.forEach((testObj, idx) => {
           if (idx === chosenIndex) {
@@ -236,7 +236,6 @@
             const pick2 = Math.floor(Math.random() * arr.length);
             const finalVar = arr[pick2];
             console.log(`Test ${testObj.id} => chosen variant=${finalVar}`);
-
             const assignmentData = {
               variant: finalVar,
               assigned_variant: finalVar,
@@ -261,11 +260,9 @@
           }
         });
       }
-
       console.groupEnd();
     }
 
-    // Check for an existing valid assignment before setting a new one.
     setOrKeepAssignment(testObj, data) {
       console.group(`Setting/Updating Assignment for ${testObj.id}`);
       const existingAssignment = this.assignmentManager.getAssignment(testObj.id);
@@ -277,7 +274,9 @@
       console.groupEnd();
     }
 
-    // Apply assignments immediately, then update the "exposed" flag and track exposures after a short delay.
+    // Immediately add body classes and then, in a delayed task,
+    // update the exposed flag only for assignments that were applied (i.e. whose body class was added),
+    // persist assignments, and trigger exposure events.
     applyAssignments() {
       console.group('Applying Assignments');
       if (!document.body) {
@@ -285,21 +284,16 @@
         console.groupEnd();
         return;
       }
-
       let currentTemplate = document.body.getAttribute('data-template');
-
       const getPath = (str) => {
         try {
           let url = new URL(str);
           return url.pathname.replace(/\/+$/, '');
         } catch (e) {
-          if (!str.startsWith('/')) {
-            str = '/' + str;
-          }
+          if (!str.startsWith('/')) { str = '/' + str; }
           return str.replace(/\/+$/, '');
         }
       };
-
       const currentPath = getPath(window.location.href);
       console.log('Current normalized path:', currentPath);
 
@@ -309,11 +303,7 @@
         } else if (currentPath.indexOf('/products/') === 0) {
           currentTemplate = 'product';
         } else if (currentPath.indexOf('/collections/') === 0) {
-          if (currentPath.indexOf('/products/') !== -1) {
-            currentTemplate = 'product';
-          } else {
-            currentTemplate = 'collection';
-          }
+          currentTemplate = (currentPath.indexOf('/products/') !== -1) ? 'product' : 'collection';
         } else if (currentPath.indexOf('/cart') === 0) {
           currentTemplate = 'cart';
         } else if (currentPath.indexOf('/checkout') === 0) {
@@ -330,9 +320,7 @@
       // Get all valid assignments.
       const assts = this.assignmentManager.getAllAssignments() || [];
       const toApply = assts.filter(a => {
-        if (standardGroups.includes(a.pageGroup)) {
-          return true;
-        }
+        if (standardGroups.includes(a.pageGroup)) return true;
         return getPath(a.pageGroup) === currentPath;
       });
       console.log('Assignments to apply:', toApply);
@@ -352,15 +340,15 @@
       });
       console.groupEnd();
 
-      // Delay updating the "exposed" flag and tracking exposures.
+      // Delay updating of the exposed flag only for those assignments that were applied.
       setTimeout(() => {
         toApply.forEach(a => {
+          // Regardless of variant, if a body class was added for this experiment, mark it as exposed.
           a.exposed = true;
         });
         this.assignmentManager.persist();
         this.trackExposureEvents().then(() => {
-          // Mark that exposure updating is complete.
-          window.ABExposureReady = true;
+          console.log('Exposure events tracked; resolving abExposurePromise.');
           if (window._resolveAbExposure) {
             window._resolveAbExposure();
             window._resolveAbExposure = null;
@@ -369,12 +357,12 @@
       }, 100);
     }
 
-    // Dedicated function to track exposure events separate from assignment creation.
     async trackExposureEvents() {
       console.group('Tracking Exposure Events');
       try {
         const assignments = this.assignmentManager.getAllAssignments() || [];
         for (const a of assignments) {
+          // Only send an exposure event if this assignment was marked as exposed.
           if (a.exposed) {
             console.log(`Tracking exposure for test ${a.testId}`);
             await window.postgresReporter.trackExposureEvent(a);
