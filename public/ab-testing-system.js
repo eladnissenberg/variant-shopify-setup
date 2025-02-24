@@ -5,6 +5,11 @@
     return;
   }
 
+  // Create a global promise that resolves when exposure tracking is complete.
+  if (!window.abExposurePromise) {
+    window.abExposurePromise = new Promise((resolve) => { window._resolveAbExposure = resolve; });
+  }
+
   // Check dependencies
   const checkDependencies = () => {
     const required = ['TrackingCore', 'TestAssignment', 'AssignmentManager'];
@@ -75,10 +80,11 @@
         // 2) Assign variants
         this.assignAllGroups();
 
-        // 3) Immediately apply body classes without delay.
+        // 3) Immediately apply body classes
         this.applyAssignments();
 
-        // Return success immediately—the update of the "exposed" field will happen via a scheduled task.
+        // Return success immediately; note that exposure updating and tracking happens
+        // asynchronously but will resolve our global promise before any reporting payload is built.
         return true;
       } catch (err) {
         console.error('Failed to initialize:', err);
@@ -271,8 +277,7 @@
       console.groupEnd();
     }
 
-    // Immediately apply body classes; then, after a short delay,
-    // update the exposed flag, persist assignments, and track exposures.
+    // Apply assignments immediately, then update the "exposed" flag and track exposures after a short delay.
     applyAssignments() {
       console.group('Applying Assignments');
       if (!document.body) {
@@ -347,14 +352,20 @@
       });
       console.groupEnd();
 
-      // Delay updating the exposed flag (and subsequent persistence and tracking)
-      // so that the DOM update is complete before we mark assignments as "exposed".
+      // Delay updating the "exposed" flag and tracking exposures.
       setTimeout(() => {
         toApply.forEach(a => {
           a.exposed = true;
         });
         this.assignmentManager.persist();
-        this.trackExposureEvents();
+        this.trackExposureEvents().then(() => {
+          // Mark that exposure updating is complete.
+          window.ABExposureReady = true;
+          if (window._resolveAbExposure) {
+            window._resolveAbExposure();
+            window._resolveAbExposure = null;
+          }
+        });
       }, 100);
     }
 
