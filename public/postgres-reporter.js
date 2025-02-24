@@ -236,10 +236,8 @@
         assignmentMode,
         pageGroup,
         userId,
-        name,
         assigned_variant,
-        tested_variant,
-        exposed // new parameter
+        tested_variant
       }) {
         console.group(`Tracking Assignment: ${testId}`);
         console.log('Assignment data:', {
@@ -249,10 +247,8 @@
           assignmentMode,
           pageGroup,
           userId,
-          name,
           assigned_variant,
-          tested_variant,
-          exposed
+          tested_variant
         });
   
         try {
@@ -276,10 +272,8 @@
             mode: assignmentMode,
             pageGroup,
             userId: finalUserId,
-            name: name || '',
             tested_variant: tested_variant || null,
-            assigned_variant: assigned_variant || variant,
-            exposed: exposed || false
+            assigned_variant: assigned_variant || variant
           };
   
           const asg = new TestAssignment(testId, asgData);
@@ -293,10 +287,8 @@
             assignment_mode: assignmentMode,
             page_group: pageGroup,
             shop_domain: this.shopDomain,
-            experiment_name: asg.name || '',
             assigned_variant: assigned_variant || variant,
-            tested_variant: tested_variant || null,
-            exposed: exposed || false
+            tested_variant: tested_variant || null
           });
   
           await this.queueEvent(event);
@@ -318,7 +310,6 @@
             variant: asg.variant,
             page_group: asg.pageGroup,
             shop_domain: this.shopDomain,
-            experiment_name: asg.name || '',
             tested_variant: tested_variant || null,
             assigned_variant: assigned_variant || asg.variant
           });
@@ -347,8 +338,7 @@
             test_id: asg.testId,
             variant: asg.variant,
             page_group: asg.pageGroup,
-            shop_domain: this.shopDomain,
-            experiment_name: asg.name || ''
+            shop_domain: this.shopDomain
           });
   
           if (this.deduplicator.isDuplicate(evt)) {
@@ -376,10 +366,8 @@
             variant: asg.variant,
             page_group: asg.pageGroup,
             shop_domain: this.shopDomain,
-            experiment_name: asg.name || '',
             tested_variant: asg.tested_variant || null,
-            assigned_variant: asg.assigned_variant || asg.variant,
-            exposed: asg.exposed
+            assigned_variant: asg.assigned_variant || asg.variant
           });
   
           // Directly queue the exposure event without deduplication check.
@@ -408,9 +396,7 @@
               variant: a.variant,
               type: a.type,
               mode: a.mode,
-              group: a.pageGroup,
-              name: a.name,
-              exposed: a.exposed || false
+              group: a.pageGroup
             };
           });
   

@@ -75,10 +75,10 @@
         // 2) Assign variants
         this.assignAllGroups();
 
-        // 3) Apply classes to <body> and mark experiments as exposed
+        // 3) Apply classes to <body>
         this.applyAssignments();
 
-        // Persist the updated assignments (including exposed field)
+        // Persist the updated assignments
         this.assignmentManager.persist();
 
         // 4) Track exposure events for assignments using dedicated exposure tracking
@@ -129,9 +129,6 @@
             location,
             originalLocation,
             device: test.device || 'both',
-            // Use the explicit test name from the new field.
-            // If test.name is not provided, look up the global property keyed by test.id+"_name".
-            testName: test.name || window.abTestingConfig[test.id + "_name"] || '',
             possibleNonZeroVariants: [...Array(test.variantsCount || 1)].map((_, i) => String(i + 1))
           };
         });
@@ -177,8 +174,7 @@
           tested_variant: forcedVar,
           type: (forcedVar === '0') ? 'control' : 'test',
           mode: (forcedVar === '0') ? 'forced-0' : 'forced',
-          pageGroup: group,
-          name: ft.testName || ''
+          pageGroup: group
         };
         this.setOrKeepAssignment(ft, assignmentData);
       });
@@ -220,8 +216,7 @@
             tested_variant: '0',
             type: 'control',
             mode: 'pure-control',
-            pageGroup: group,
-            name: t.testName || ''
+            pageGroup: group
           };
           this.setOrKeepAssignment(t, assignmentData);
         });
@@ -241,8 +236,7 @@
               tested_variant: finalVar,
               type: 'test',
               mode: 'probabilistic',
-              pageGroup: group,
-              name: testObj.testName || ''
+              pageGroup: group
             };
             this.setOrKeepAssignment(testObj, assignmentData);
           } else {
@@ -252,8 +246,7 @@
               tested_variant: '0',
               type: 'control',
               mode: 'excluded',
-              pageGroup: group,
-              name: testObj.testName || ''
+              pageGroup: group
             };
             this.setOrKeepAssignment(testObj, assignmentData);
           }
@@ -275,7 +268,7 @@
       console.groupEnd();
     }
 
-    // Apply assignments and mark them as exposed when the class is added.
+    // Apply assignments by adding corresponding body classes.
     applyAssignments() {
       console.group('Applying Assignments');
       if (!document.body) {
@@ -336,8 +329,7 @@
       console.log('Assignments to apply:', toApply);
 
       const prefix = 'ab';
-      // For every assignment that is applied, add the corresponding body class
-      // and mark as exposed (set exposed=true for all, regardless of variant value).
+      // For every assignment that is applied, add the corresponding body class.
       toApply.forEach(a => {
         if (a.variant !== '0') {
           document.body.classList.add(
@@ -348,8 +340,6 @@
         } else {
           document.body.classList.add(`${prefix}-${a.testId}-0`);
         }
-        // Mark assignment as exposed.
-        a.exposed = true;
       });
 
       console.groupEnd();
@@ -361,10 +351,8 @@
       try {
         const assignments = this.assignmentManager.getAllAssignments() || [];
         for (const a of assignments) {
-          if (a.exposed) {
-            console.log(`Tracking exposure for test ${a.testId}`);
-            await window.postgresReporter.trackExposureEvent(a);
-          }
+          console.log(`Tracking exposure for test ${a.testId}`);
+          await window.postgresReporter.trackExposureEvent(a);
         }
         console.log('Exposure events tracked successfully');
       } catch (err) {
