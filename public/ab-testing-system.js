@@ -70,7 +70,7 @@
         // 2) Group tests and assign variants.
         this.assignAllGroups();
 
-        // 3) Immediately add body classes.
+        // 3) Immediately add body classes and persist assignments.
         this.applyAssignments();
 
         return true;
@@ -240,9 +240,7 @@
       console.groupEnd();
     }
 
-    // Immediately add body classes and then, in a delayed task,
-    // update the exposed flag only for assignments that were applied (i.e. whose body class was added),
-    // persist assignments, and trigger exposure events.
+    // In applyAssignments we now only add body classes and persist assignments.
     applyAssignments() {
       console.group('Applying Assignments');
       if (!document.body) {
@@ -304,18 +302,9 @@
           document.body.classList.add(`${prefix}-${a.testId}-0`);
         }
       });
+      // Persist assignments after applying classes.
+      this.assignmentManager.persist();
       console.groupEnd();
-
-      // Delay updating of the exposed flag for only those assignments that were applied.
-      setTimeout(() => {
-        toApply.forEach(a => { a.exposed = true; });
-        this.assignmentManager.persist();
-        this.trackExposureEvents().then(() => {
-          console.log('Exposure events tracked; dispatching "abTestingReady" event.');
-          // Dispatch a custom event to signal that AB testing is ready.
-          document.dispatchEvent(new CustomEvent("abTestingReady"));
-        });
-      }, 100);
     }
 
     async trackExposureEvents() {
@@ -323,9 +312,10 @@
       try {
         const assignments = this.assignmentManager.getAllAssignments() || [];
         for (const a of assignments) {
-          if (a.exposed) {
+          if (a.exposed !== true) {
             console.log(`Tracking exposure for test ${a.testId}`);
             await window.postgresReporter.trackExposureEvent(a);
+            a.exposed = true;
           }
         }
         console.log('Exposure events tracked successfully');
@@ -372,6 +362,17 @@
       const mgr = new ABTestManager();
       const ok = await mgr.initialize();
       console.log('AB Testing init complete:', { success: ok });
+      // Separate exposure event triggering on window load.
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          mgr.trackExposureEvents().then(() => {
+            console.log('Exposure events tracked on window load; dispatching "abTestingReady" event.');
+            document.dispatchEvent(new CustomEvent("abTestingReady"));
+          }).catch(err => {
+            console.error('Error tracking exposure events on window load:', err);
+          });
+        }, 200);
+      });
     } catch (err) {
       console.error('Failed to init AB Testing System:', err);
     } finally {
