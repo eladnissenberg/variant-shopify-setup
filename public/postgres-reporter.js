@@ -371,6 +371,8 @@
       async trackExposureEvent(asg) {
         console.group(`Tracking Exposure Event for ${asg.testId}`);
         try {
+          // Update the exposed flag before creating the payload.
+          asg.exposed = true;
           const evt = this.createEventPayload('test_exposure', 'test', {
             test_id: asg.testId,
             variant: asg.variant,
@@ -379,10 +381,8 @@
             experiment_name: asg.name || '',
             tested_variant: asg.tested_variant || null,
             assigned_variant: asg.assigned_variant || asg.variant,
-            exposed: asg.exposed
+            exposed: asg.exposed  // now this should be true
           });
-  
-          // Directly queue the exposure event without deduplication check.
           await this.queueEvent(evt);
           console.log('Exposure event tracked successfully for test', asg.testId);
         } catch (err) {
@@ -392,6 +392,7 @@
           console.groupEnd();
         }
       }
+      
   
       createEventPayload(eventName, eventType, eventData = {}) {
         console.group('Creating Event Payload');
