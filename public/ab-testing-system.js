@@ -81,8 +81,8 @@
         // Persist the updated assignments (including exposed field)
         this.assignmentManager.persist();
 
-        // 4) Track them
-        await this.trackTestAssignments();
+        // 4) Track exposure events for assignments using dedicated exposure tracking
+        await this.trackExposureEvents();
         return true;
       } catch (err) {
         console.error('Failed to initialize:', err);
@@ -355,32 +355,20 @@
       console.groupEnd();
     }
 
-    async trackTestAssignments() {
-      console.group('Tracking Test Assignments');
+    // Dedicated function to track exposure events separate from assignment creation.
+    async trackExposureEvents() {
+      console.group('Tracking Exposure Events');
       try {
-        if (!window.postgresReporter) {
-          throw new Error('PostgreSQL reporter not found');
+        const assignments = this.assignmentManager.getAllAssignments() || [];
+        for (const a of assignments) {
+          if (a.exposed) {
+            console.log(`Tracking exposure for test ${a.testId}`);
+            await window.postgresReporter.trackExposureEvent(a);
+          }
         }
-        const assts = this.assignmentManager.getAllAssignments() || [];
-        console.log('Tracking assignments:', assts);
-
-        for (const a of assts) {
-          await window.postgresReporter.trackAssignment({
-            testId: a.testId,
-            variant: a.variant,
-            assignmentType: a.type,
-            assignmentMode: a.mode,
-            pageGroup: a.pageGroup,
-            userId: this.userId,
-            name: a.testName || '',
-            assigned_variant: a.assigned_variant,
-            tested_variant: a.tested_variant,
-            exposed: a.exposed
-          });
-        }
-        console.log('Test assignments tracked successfully');
+        console.log('Exposure events tracked successfully');
       } catch (err) {
-        console.error('Failed to track test assignments:', err);
+        console.error('Failed to track exposure events:', err);
       } finally {
         console.groupEnd();
       }

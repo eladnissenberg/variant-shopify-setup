@@ -367,6 +367,32 @@
         }
       }
   
+      // New dedicated method to track exposure events independently.
+      async trackExposureEvent(asg) {
+        console.group(`Tracking Exposure Event for ${asg.testId}`);
+        try {
+          const evt = this.createEventPayload('test_exposure', 'test', {
+            test_id: asg.testId,
+            variant: asg.variant,
+            page_group: asg.pageGroup,
+            shop_domain: this.shopDomain,
+            experiment_name: asg.name || '',
+            tested_variant: asg.tested_variant || null,
+            assigned_variant: asg.assigned_variant || asg.variant,
+            exposed: asg.exposed
+          });
+  
+          // Directly queue the exposure event without deduplication check.
+          await this.queueEvent(evt);
+          console.log('Exposure event tracked successfully for test', asg.testId);
+        } catch (err) {
+          console.error('Failed to track exposure event for test', asg.testId, err);
+          throw err;
+        } finally {
+          console.groupEnd();
+        }
+      }
+  
       createEventPayload(eventName, eventType, eventData = {}) {
         console.group('Creating Event Payload');
         try {
