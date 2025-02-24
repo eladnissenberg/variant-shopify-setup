@@ -393,6 +393,7 @@
         }
       }
       
+      
   
       createEventPayload(eventName, eventType, eventData = {}) {
         console.group('Creating Event Payload');
