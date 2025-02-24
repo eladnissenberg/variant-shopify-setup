@@ -1,13 +1,5 @@
 // AB Testing System
 (() => {
-  // Create a global promise that will be resolved once exposure tracking is complete.
-  // This promise is created as soon as this file is executed.
-  if (!window.abExposurePromise) {
-    window.abExposurePromise = new Promise((resolve) => {
-      window._resolveAbExposure = resolve;
-    });
-  }
-
   // Check dependencies
   const checkDependencies = () => {
     const required = ['TrackingCore', 'TestAssignment', 'AssignmentManager'];
@@ -80,32 +72,6 @@
 
         // 3) Immediately add body classes.
         this.applyAssignments();
-
-        // In a short timeout (100ms), update the "exposed" flag for each experiment
-        // that was applied (regardless of its variant), persist the assignments, and track exposure events.
-        setTimeout(() => {
-          // Only update "exposed" to true for experiments that had their body class added.
-          // (Regardless of whether variant is "0" or not.)
-          const toUpdate = this.assignmentManager.getAllAssignments().filter(a => {
-            // Only update if this assignment was applied on this page.
-            // You can verify this by checking if its testId appears in the body class.
-            // For simplicity, we use the same "toApply" logic as in applyAssignments().
-            const prefix = 'ab';
-            const className = (a.variant !== '0') 
-              ? `${prefix}-${a.testId}-${a.variant}` 
-              : `${prefix}-${a.testId}-0`;
-            return document.body.classList.contains(className);
-          });
-          toUpdate.forEach(a => { a.exposed = true; });
-          this.assignmentManager.persist();
-          this.trackExposureEvents().then(() => {
-            console.log('Exposure events tracked; resolving abExposurePromise.');
-            if (window._resolveAbExposure) {
-              window._resolveAbExposure();
-              window._resolveAbExposure = null;
-            }
-          });
-        }, 100);
 
         return true;
       } catch (err) {
@@ -317,7 +283,7 @@
       const standardGroups = ['global', currentTemplate];
       console.log('Standard groups for apply:', standardGroups);
 
-      // Get all valid assignments.
+      // Get assignments that should be applied on this page.
       const assts = this.assignmentManager.getAllAssignments() || [];
       const toApply = assts.filter(a => {
         if (standardGroups.includes(a.pageGroup)) return true;
@@ -340,19 +306,14 @@
       });
       console.groupEnd();
 
-      // Delay updating of the exposed flag only for those assignments that were applied.
+      // Delay updating of the exposed flag for only those assignments that were applied.
       setTimeout(() => {
-        toApply.forEach(a => {
-          // Regardless of variant, if a body class was added for this experiment, mark it as exposed.
-          a.exposed = true;
-        });
+        toApply.forEach(a => { a.exposed = true; });
         this.assignmentManager.persist();
         this.trackExposureEvents().then(() => {
-          console.log('Exposure events tracked; resolving abExposurePromise.');
-          if (window._resolveAbExposure) {
-            window._resolveAbExposure();
-            window._resolveAbExposure = null;
-          }
+          console.log('Exposure events tracked; dispatching "abTestingReady" event.');
+          // Dispatch a custom event to signal that AB testing is ready.
+          document.dispatchEvent(new CustomEvent("abTestingReady"));
         });
       }, 100);
     }
@@ -362,7 +323,6 @@
       try {
         const assignments = this.assignmentManager.getAllAssignments() || [];
         for (const a of assignments) {
-          // Only send an exposure event if this assignment was marked as exposed.
           if (a.exposed) {
             console.log(`Tracking exposure for test ${a.testId}`);
             await window.postgresReporter.trackExposureEvent(a);
