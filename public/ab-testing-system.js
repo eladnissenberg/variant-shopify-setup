@@ -169,7 +169,6 @@
       forcedTests.forEach(ft => {
         const forcedVar = ft.forcedVariant || '0';
         const assignmentData = {
-          variant: forcedVar,
           assigned_variant: forcedVar,
           tested_variant: forcedVar,
           type: (forcedVar === '0') ? 'control' : 'test',
@@ -211,7 +210,6 @@
         // User not in experiment: assign control variant.
         unforcedTests.forEach(t => {
           const assignmentData = {
-            variant: '0',
             assigned_variant: '0',
             tested_variant: '0',
             type: 'control',
@@ -231,7 +229,6 @@
             console.log(`Test ${testObj.id} => chosen variant=${finalVar}`);
 
             const assignmentData = {
-              variant: finalVar,
               assigned_variant: finalVar,
               tested_variant: finalVar,
               type: 'test',
@@ -241,7 +238,6 @@
             this.setOrKeepAssignment(testObj, assignmentData);
           } else {
             const assignmentData = {
-              variant: '0',
               assigned_variant: '0',
               tested_variant: '0',
               type: 'control',
@@ -331,11 +327,11 @@
       const prefix = 'ab';
       // For every assignment that is applied, add the corresponding body class.
       toApply.forEach(a => {
-        if (a.variant !== '0') {
+        if (a.assigned_variant !== '0') {
           document.body.classList.add(
             `${prefix}-active`,
             `${prefix}-${a.testId}`,
-            `${prefix}-${a.testId}-${a.variant}`
+            `${prefix}-${a.testId}-${a.assigned_variant}`
           );
         } else {
           document.body.classList.add(`${prefix}-${a.testId}-0`);

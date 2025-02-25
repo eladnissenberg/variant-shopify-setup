@@ -13,13 +13,13 @@
         console.group('Creating Test Assignment');
         try {
           this.testId = testId;
-          this.variant = data.variant;
+          // Removed redundant "variant" field. Using assigned_variant instead.
           this.type = data.type;
           this.mode = data.mode;
           this.pageGroup = data.pageGroup;
           this.timestamp = Date.now();
           this.tested_variant = data.tested_variant !== undefined ? data.tested_variant : null;
-          this.assigned_variant = data.assigned_variant || this.variant;
+          this.assigned_variant = data.assigned_variant;
           console.log('Created assignment:', this.toStorageFormat());
         } catch (err) {
           console.error('Failed to create assignment:', err);
@@ -32,7 +32,7 @@
       validateInput(testId, data) {
         if (!testId) throw new Error('TestId is required');
         if (!data) throw new Error('Assignment data required');
-        const req = ['variant', 'type', 'mode', 'pageGroup'];
+        const req = ['assigned_variant', 'type', 'mode', 'pageGroup'];
         const missing = req.filter(f => !data[f]);
         if (missing.length > 0) {
           throw new Error(`Missing required fields: ${missing.join(', ')}`);
@@ -42,7 +42,7 @@
       isValid() {
         console.group('Validating Assignment');
         try {
-          const required = ['testId', 'variant', 'type', 'mode', 'pageGroup', 'timestamp'];
+          const required = ['testId', 'assigned_variant', 'type', 'mode', 'pageGroup', 'timestamp'];
           const hasAll = required.every(f => this[f] !== undefined);
           const notExpired = (Date.now() - this.timestamp) < (30 * 24 * 60 * 60 * 1000);
           const isValid = hasAll && notExpired;
@@ -56,18 +56,18 @@
       toStorageFormat() {
         return {
           testId: this.testId,
-          variant: this.variant,
           type: this.type,
           mode: this.mode,
           pageGroup: this.pageGroup,
-          timestamp: this.timestamp
+          timestamp: this.timestamp,
+          assigned_variant: this.assigned_variant,
+          tested_variant: this.tested_variant
         };
       }
   
       toPixelFormat() {
         return {
           testId: this.testId,
-          variant: this.variant,
           type: this.type,
           mode: this.mode,
           group: this.pageGroup,
@@ -85,7 +85,7 @@
           }
           const asg = new TestAssignment(data.testId, data);
           asg.tested_variant = data.tested_variant !== undefined ? data.tested_variant : null;
-          asg.assigned_variant = data.assigned_variant || data.variant;
+          asg.assigned_variant = data.assigned_variant || data.variant; // Fallback for legacy data
           console.log('Created assignment from storage:', asg);
           return asg;
         } catch (err) {

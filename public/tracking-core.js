@@ -239,3 +239,4 @@
     window.TrackingCore = TrackingCore;
     console.log('TrackingCore exported to window');
   })();
+  

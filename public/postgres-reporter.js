@@ -231,7 +231,6 @@
   
       async trackAssignment({
         testId,
-        variant,
         assignmentType,
         assignmentMode,
         pageGroup,
@@ -242,7 +241,6 @@
         console.group(`Tracking Assignment: ${testId}`);
         console.log('Assignment data:', {
           testId,
-          variant,
           assignmentType,
           assignmentMode,
           pageGroup,
@@ -252,7 +250,7 @@
         });
   
         try {
-          if (!testId || !variant || !assignmentType || !assignmentMode || !pageGroup) {
+          if (!testId || !assignmentType || !assignmentMode || !pageGroup) {
             throw new Error('Missing assignment data');
           }
   
@@ -267,13 +265,12 @@
           }
   
           const asgData = {
-            variant,
             type: assignmentType,
             mode: assignmentMode,
             pageGroup,
             userId: finalUserId,
             tested_variant: tested_variant || null,
-            assigned_variant: assigned_variant || variant
+            assigned_variant: assigned_variant || '0'
           };
   
           const asg = new TestAssignment(testId, asgData);
@@ -282,17 +279,16 @@
   
           const event = this.createEventPayload('test_assignment', 'system', {
             test_id: testId,
-            variant,
             assignment_type: assignmentType,
             assignment_mode: assignmentMode,
             page_group: pageGroup,
             shop_domain: this.shopDomain,
-            assigned_variant: assigned_variant || variant,
+            assigned_variant: asg.assigned_variant,
             tested_variant: tested_variant || null
           });
   
           await this.queueEvent(event);
-          await this._trackImpression(asg, tested_variant, assigned_variant);
+          await this._trackImpression(asg);
           console.log('Assignment tracked successfully');
         } catch (err) {
           console.error('Failed to track assignment:', err);
@@ -302,16 +298,15 @@
         }
       }
   
-      async _trackImpression(asg, tested_variant, assigned_variant) {
+      async _trackImpression(asg) {
         console.group(`Tracking Impression: ${asg.testId}`);
         try {
           const evt = this.createEventPayload('test_impression', 'test', {
             test_id: asg.testId,
-            variant: asg.variant,
+            assigned_variant: asg.assigned_variant,
             page_group: asg.pageGroup,
             shop_domain: this.shopDomain,
-            tested_variant: tested_variant || null,
-            assigned_variant: assigned_variant || asg.variant
+            tested_variant: asg.tested_variant || null
           });
   
           if (this.deduplicator.isDuplicate(evt)) {
@@ -336,7 +331,7 @@
         try {
           const evt = this.createEventPayload('test_impression', 'test', {
             test_id: asg.testId,
-            variant: asg.variant,
+            assigned_variant: asg.assigned_variant,
             page_group: asg.pageGroup,
             shop_domain: this.shopDomain
           });
@@ -363,11 +358,10 @@
         try {
           const evt = this.createEventPayload('test_exposure', 'test', {
             test_id: asg.testId,
-            variant: asg.variant,
+            assigned_variant: asg.assigned_variant,
             page_group: asg.pageGroup,
             shop_domain: this.shopDomain,
-            tested_variant: asg.tested_variant || null,
-            assigned_variant: asg.assigned_variant || asg.variant
+            tested_variant: asg.tested_variant || null
           });
   
           // Directly queue the exposure event without deduplication check.
@@ -393,7 +387,7 @@
           const test_assignments = {};
           allAssignments.forEach(a => {
             test_assignments[a.testId] = {
-              variant: a.variant,
+              assigned_variant: a.assigned_variant,
               type: a.type,
               mode: a.mode,
               group: a.pageGroup
@@ -414,9 +408,9 @@
                 test_assignments,
                 path: this.cleanPath(window.location.pathname),
                 template: window.Shopify?.template
-                         || document.body?.getAttribute('data-template')
-                         || window.location.pathname.split('/')[1]
-                         || 'unknown'
+                          || document.body?.getAttribute('data-template')
+                          || window.location.pathname.split('/')[1]
+                          || 'unknown'
               }
             }
           };
