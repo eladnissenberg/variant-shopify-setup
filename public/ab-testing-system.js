@@ -68,21 +68,23 @@
       try {
         // Clean up old assignments
         this.assignmentManager.cleanup();
-
+    
         // 1) Gather tests from settings
         await this.loadActiveTestsFromSettings();
-
+    
         // 2) Assign variants
         this.assignAllGroups();
-
+    
         // 3) Apply classes to <body>
         this.applyAssignments();
-
+    
         // Persist the updated assignments
         this.assignmentManager.persist();
-
+    
         // 4) Track exposure events for assignments using dedicated exposure tracking
-        await this.trackExposureEvents();
+        // Remove test_exposure events: comment out or remove the following line.
+        // await this.trackExposureEvents();
+    
         return true;
       } catch (err) {
         console.error('Failed to initialize:', err);
@@ -91,6 +93,7 @@
         console.groupEnd();
       }
     }
+    
 
     loadActiveTestsFromSettings() {
       console.group('Loading Tests from Settings');
