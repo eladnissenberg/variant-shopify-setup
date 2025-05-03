@@ -268,81 +268,94 @@
     }
 
     // Apply assignments by adding corresponding body classes.
-    applyAssignments() {
-      console.group('Applying Assignments');
-      if (!document.body) {
-        console.warn('No document.body');
-        console.groupEnd();
-        return;
-      }
-
-      let currentTemplate = document.body.getAttribute('data-template');
-
-      const getPath = (str) => {
-        try {
-          let url = new URL(str);
-          return url.pathname.replace(/\/+$/, '');
-        } catch (e) {
-          if (!str.startsWith('/')) {
-            str = '/' + str;
-          }
-          return str.replace(/\/+$/, '');
+      applyAssignments() {
+        console.group('Applying Assignments');
+        if (!document.body) {
+          console.warn('No document.body');
+          console.groupEnd();
+          return;
         }
-      };
 
-      const currentPath = getPath(window.location.href);
-      console.log('Current normalized path:', currentPath);
+        let currentTemplate = document.body.getAttribute('data-template');
 
-      if (!currentTemplate) {
-        if (currentPath === '/' || currentPath === '') {
-          currentTemplate = 'homepage';
-        } else if (currentPath.indexOf('/products/') === 0) {
-          currentTemplate = 'product';
-        } else if (currentPath.indexOf('/collections/') === 0) {
-          if (currentPath.indexOf('/products/') !== -1) {
+        const getPath = (str) => {
+          try {
+            let url = new URL(str);
+            return url.pathname.replace(/\/+$/, '');
+          } catch (e) {
+            if (!str.startsWith('/')) {
+              str = '/' + str;
+            }
+            return str.replace(/\/+$/, '');
+          }
+        };
+
+        const currentPath = getPath(window.location.href);
+        console.log('Current normalized path:', currentPath);
+
+        if (!currentTemplate) {
+          if (currentPath === '/' || currentPath === '') {
+            currentTemplate = 'homepage';
+          } else if (currentPath.indexOf('/products/') === 0) {
             currentTemplate = 'product';
+          } else if (currentPath.indexOf('/collections/') === 0) {
+            if (currentPath.indexOf('/products/') !== -1) {
+              currentTemplate = 'product';
+            } else {
+              currentTemplate = 'collection';
+            }
+          } else if (currentPath.indexOf('/cart') === 0) {
+            currentTemplate = 'cart';
+          } else if (currentPath.indexOf('/checkout') === 0) {
+            currentTemplate = 'checkout';
           } else {
-            currentTemplate = 'collection';
+            currentTemplate = currentPath.split('/')[1] || 'home';
           }
-        } else if (currentPath.indexOf('/cart') === 0) {
-          currentTemplate = 'cart';
-        } else if (currentPath.indexOf('/checkout') === 0) {
-          currentTemplate = 'checkout';
-        } else {
-          currentTemplate = currentPath.split('/')[1] || 'home';
         }
+        console.log('Current template:', currentTemplate);
+
+        const standardGroups = ['global', currentTemplate];
+        console.log('Standard groups for apply:', standardGroups);
+
+        // Get all valid assignments.
+        const assts = this.assignmentManager.getAllAssignments() || [];
+        
+        // Get currently active test IDs
+        const activeTestIds = this.allTests.map(test => test.id);
+        console.log('Active test IDs:', activeTestIds);
+        
+        // Filter assignments to only those for active tests that match the current page
+        const toApply = assts.filter(a => {
+          // First check if the test is still active
+          if (!activeTestIds.includes(a.testId)) {
+            console.log(`Skipping inactive test ${a.testId}`);
+            return false;
+          }
+          // Then check if it's relevant to the current page
+          if (standardGroups.includes(a.pageGroup)) {
+            return true;
+          }
+          return getPath(a.pageGroup) === currentPath;
+        });
+        
+        console.log('Assignments to apply:', toApply);
+
+        const prefix = 'ab';
+        // For every assignment that is applied, add the corresponding body class.
+        toApply.forEach(a => {
+          if (a.assigned_variant !== '0') {
+            document.body.classList.add(
+              `${prefix}-active`,
+              `${prefix}-${a.testId}`,
+              `${prefix}-${a.testId}-${a.assigned_variant}`
+            );
+          } else {
+            document.body.classList.add(`${prefix}-${a.testId}-0`);
+          }
+        });
+
+        console.groupEnd();
       }
-      console.log('Current template:', currentTemplate);
-
-      const standardGroups = ['global', currentTemplate];
-      console.log('Standard groups for apply:', standardGroups);
-
-      // Get all valid assignments.
-      const assts = this.assignmentManager.getAllAssignments() || [];
-      const toApply = assts.filter(a => {
-        if (standardGroups.includes(a.pageGroup)) {
-          return true;
-        }
-        return getPath(a.pageGroup) === currentPath;
-      });
-      console.log('Assignments to apply:', toApply);
-
-      const prefix = 'ab';
-      // For every assignment that is applied, add the corresponding body class.
-      toApply.forEach(a => {
-        if (a.assigned_variant !== '0') {
-          document.body.classList.add(
-            `${prefix}-active`,
-            `${prefix}-${a.testId}`,
-            `${prefix}-${a.testId}-${a.assigned_variant}`
-          );
-        } else {
-          document.body.classList.add(`${prefix}-${a.testId}-0`);
-        }
-      });
-
-      console.groupEnd();
-    }
 
     // Dedicated function to track exposure events separate from assignment creation.
     async trackExposureEvents() {
