@@ -1,13 +1,16 @@
 /* Assignment Manager
-   Stores AB test assignments in localStorage
-   Dependencies: TrackingCore */
+  Stores AB test assignments in localStorage
+  Dependencies: TrackingCore */
 
-   (() => {
+  (() => {
     if (window.TestAssignment || window.AssignmentManager) {
       console.warn('Assignment Manager already loaded, skipping initialization');
       return;
     }
-  
+   
+    // Add preview mode detection
+    const isPreviewMode = () => window.location?.hostname?.indexOf('myshopify') > -1;
+   
     class TestAssignment {
       constructor(testId, data) {
         console.group('Creating Test Assignment');
@@ -28,7 +31,7 @@
           console.groupEnd();
         }
       }
-  
+   
       validateInput(testId, data) {
         if (!testId) throw new Error('TestId is required');
         if (!data) throw new Error('Assignment data required');
@@ -38,7 +41,7 @@
           throw new Error(`Missing required fields: ${missing.join(', ')}`);
         }
       }
-  
+   
       isValid() {
         console.group('Validating Assignment');
         try {
@@ -52,7 +55,7 @@
           console.groupEnd();
         }
       }
-  
+   
       toStorageFormat() {
         return {
           testId: this.testId,
@@ -64,7 +67,7 @@
           tested_variant: this.tested_variant
         };
       }
-  
+   
       toPixelFormat() {
         return {
           testId: this.testId,
@@ -75,7 +78,7 @@
           assigned_variant: this.assigned_variant
         };
       }
-  
+   
       static fromStorage(data) {
         console.group('Creating Assignment from Storage');
         try {
@@ -96,7 +99,7 @@
         }
       }
     }
-  
+   
     class AssignmentManager {
       constructor() {
         console.group('Initializing Assignment Manager');
@@ -116,7 +119,7 @@
           console.groupEnd();
         }
       }
-  
+   
       setupCore() {
         if (typeof TrackingCore === 'undefined') {
           throw new Error('TrackingCore not found');
@@ -127,10 +130,17 @@
         };
         this.assignments = new Map();
         this.core = new TrackingCore();
-        this.loadFromStorage();
+        
+        // Only load from storage if not in preview mode
+        if (!isPreviewMode()) {
+          this.loadFromStorage();
+        } else {
+          console.log('Preview mode detected - not loading stored assignments');
+        }
+        
         this.persist();
       }
-  
+   
       loadFromStorage() {
         console.group('Loading Assignments from Storage');
         try {
@@ -155,7 +165,7 @@
           console.groupEnd();
         }
       }
-  
+   
       setAssignment(testId, data) {
         console.group(`Setting Assignment for ${testId}`);
         try {
@@ -171,7 +181,7 @@
           console.groupEnd();
         }
       }
-  
+   
       getAssignment(testId) {
         console.group(`Getting Assignment for ${testId}`);
         try {
@@ -183,7 +193,7 @@
           console.groupEnd();
         }
       }
-  
+   
       getAllAssignments() {
         console.group('Getting All Assignments');
         try {
@@ -194,7 +204,7 @@
           console.groupEnd();
         }
       }
-  
+   
       recalculateTestedVariants() {
         console.group('Recalculating tested_variant for all assignments by page group');
         try {
@@ -206,12 +216,12 @@
             }
             groups[group].push(assignment);
           });
-  
+   
           Object.keys(groups).forEach(group => {
             const groupAssignments = groups[group];
             const nonZeroAssignments = groupAssignments.filter(a => a.assigned_variant !== "0");
             const nonZeroCount = nonZeroAssignments.length;
-  
+   
             if (nonZeroCount === 0) {
               groupAssignments.forEach(a => {
                 a.tested_variant = "0";
@@ -239,7 +249,7 @@
           console.groupEnd();
         }
       }
-  
+   
       persist() {
         console.group('Persisting Assignments');
         try {
@@ -261,7 +271,7 @@
           console.groupEnd();
         }
       }
-  
+   
       cleanup() {
         console.group('Cleaning Up Assignments');
         try {
@@ -286,7 +296,7 @@
         }
       }
     }
-  
+   
     window.TestAssignment = TestAssignment;
     window.AssignmentManager = AssignmentManager;
     try {
@@ -294,5 +304,4 @@
     } catch (err) {
       console.error('Failed to initialize shared Assignment Manager:', err);
     }
-  })();
-  
+   })();
