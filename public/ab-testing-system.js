@@ -13,7 +13,6 @@
       console.error('Missing AB Testing deps:', missing);
       return false;
     }
-    console.log('All AB Testing deps loaded');
     return true;
   };
 
@@ -24,47 +23,34 @@
 
   class ABTestManager {
     constructor() {
-      console.group('Initializing AB Testing System');
       if (ABTestManager.instance) {
-        console.log('Returning existing instance');
-        console.groupEnd();
         return ABTestManager.instance;
       }
       try {
         this.setupCore();
         this.setupState();
         ABTestManager.instance = this;
-        console.log('AB Testing System initialized successfully');
       } catch (err) {
         console.error('Failed to init AB Testing:', err);
         throw err;
-      } finally {
-        console.groupEnd();
       }
     }
 
     setupCore() {
-      console.group('Setting up core');
       this.core = new TrackingCore();
       this.assignmentManager = new AssignmentManager();
       // Use window.abTestingConfig (populated by our Liquid snippet)
       this.settings = window.abTestingConfig || {};
-      console.log('Settings loaded:', this.settings);
-      console.groupEnd();
     }
 
     setupState() {
-      console.group('Setting up state');
       this.allTests = [];
       const { userId, sessionId } = this.core.getTrackingIds();
       this.userId = userId;
       this.sessionId = sessionId;
-      console.log('State:', { userId, sessionId });
-      console.groupEnd();
     }
 
     async initialize() {
-      console.group('Initializing Test System');
       try {
         // Clean up old assignments
         this.assignmentManager.cleanup();
@@ -89,14 +75,10 @@
       } catch (err) {
         console.error('Failed to initialize:', err);
         return false;
-      } finally {
-        console.groupEnd();
       }
     }
-    
 
     loadActiveTestsFromSettings() {
-      console.group('Loading Tests from Settings');
       try {
         // Get tests from window.abTestingConfig.tests (populated by Liquid)
         const tests = this.settings.tests || [];
@@ -135,17 +117,12 @@
             possibleNonZeroVariants: [...Array(test.variantsCount || 1)].map((_, i) => String(i + 1))
           };
         });
-
-        console.log('All tests from settings:', this.allTests);
       } catch (err) {
         console.error('Error loading tests:', err);
-      } finally {
-        console.groupEnd();
       }
     }
 
     assignAllGroups() {
-      console.group('Assigning variants for each group');
       const groupMap = {};
       this.allTests.forEach(t => {
         // Group tests by their resolved location.
@@ -158,13 +135,9 @@
         const testsInGroup = groupMap[group];
         this.assignGroup(group, testsInGroup);
       });
-
-      console.groupEnd();
     }
 
     assignGroup(group, tests) {
-      console.group(`Assigning group="${group}":`, tests);
-
       const forcedTests = tests.filter(t => t.mode === 'forced');
       const unforcedTests = tests.filter(t => t.mode === 'test');
 
@@ -183,8 +156,6 @@
 
       // 2) Handle unforced tests
       if (unforcedTests.length === 0) {
-        console.log(`No unforced tests for group=${group}`);
-        console.groupEnd();
         return;
       }
 
@@ -205,9 +176,7 @@
       }
 
       const fraction = traffic / 100;
-      console.log(`Group=${group}, traffic=${traffic}, fraction=${fraction}`);
       const rng = Math.random();
-      console.log(`rng=${rng}, group=${group}`);
 
       if (rng >= fraction) {
         // User not in experiment: assign control variant.
@@ -229,7 +198,6 @@
             const arr = testObj.possibleNonZeroVariants || ['1'];
             const pick2 = Math.floor(Math.random() * arr.length);
             const finalVar = arr[pick2];
-            console.log(`Test ${testObj.id} => chosen variant=${finalVar}`);
 
             const assignmentData = {
               assigned_variant: finalVar,
@@ -251,126 +219,106 @@
           }
         });
       }
-
-      console.groupEnd();
     }
 
     // Check for an existing valid assignment before setting a new one.
     setOrKeepAssignment(testObj, data) {
-      console.group(`Setting/Updating Assignment for ${testObj.id}`);
       const existingAssignment = this.assignmentManager.getAssignment(testObj.id);
       if (existingAssignment) {
-        console.log(`Existing valid assignment found for test ${testObj.id}:`, existingAssignment);
+        // Keep existing assignment
       } else {
         this.assignmentManager.setAssignment(testObj.id, data);
       }
-      console.groupEnd();
     }
 
     // Apply assignments by adding corresponding body classes.
-      applyAssignments() {
-        console.group('Applying Assignments');
-        if (!document.body) {
-          console.warn('No document.body');
-          console.groupEnd();
-          return;
-        }
-
-        let currentTemplate = document.body.getAttribute('data-template');
-
-        const getPath = (str) => {
-          try {
-            let url = new URL(str);
-            return url.pathname.replace(/\/+$/, '');
-          } catch (e) {
-            if (!str.startsWith('/')) {
-              str = '/' + str;
-            }
-            return str.replace(/\/+$/, '');
-          }
-        };
-
-        const currentPath = getPath(window.location.href);
-        console.log('Current normalized path:', currentPath);
-
-        if (!currentTemplate) {
-          if (currentPath === '/' || currentPath === '') {
-            currentTemplate = 'homepage';
-          } else if (currentPath.indexOf('/products/') === 0) {
-            currentTemplate = 'product';
-          } else if (currentPath.indexOf('/collections/') === 0) {
-            if (currentPath.indexOf('/products/') !== -1) {
-              currentTemplate = 'product';
-            } else {
-              currentTemplate = 'collection';
-            }
-          } else if (currentPath.indexOf('/cart') === 0) {
-            currentTemplate = 'cart';
-          } else if (currentPath.indexOf('/checkout') === 0) {
-            currentTemplate = 'checkout';
-          } else {
-            currentTemplate = currentPath.split('/')[1] || 'home';
-          }
-        }
-        console.log('Current template:', currentTemplate);
-
-        const standardGroups = ['global', currentTemplate];
-        console.log('Standard groups for apply:', standardGroups);
-
-        // Get all valid assignments.
-        const assts = this.assignmentManager.getAllAssignments() || [];
-        
-        // Get currently active test IDs
-        const activeTestIds = this.allTests.map(test => test.id);
-        console.log('Active test IDs:', activeTestIds);
-        
-        // Filter assignments to only those for active tests that match the current page
-        const toApply = assts.filter(a => {
-          // First check if the test is still active
-          if (!activeTestIds.includes(a.testId)) {
-            console.log(`Skipping inactive test ${a.testId}`);
-            return false;
-          }
-          // Then check if it's relevant to the current page
-          if (standardGroups.includes(a.pageGroup)) {
-            return true;
-          }
-          return getPath(a.pageGroup) === currentPath;
-        });
-        
-        console.log('Assignments to apply:', toApply);
-
-        const prefix = 'ab';
-        // For every assignment that is applied, add the corresponding body class.
-        toApply.forEach(a => {
-          if (a.assigned_variant !== '0') {
-            document.body.classList.add(
-              `${prefix}-active`,
-              `${prefix}-${a.testId}`,
-              `${prefix}-${a.testId}-${a.assigned_variant}`
-            );
-          } else {
-            document.body.classList.add(`${prefix}-${a.testId}-0`);
-          }
-        });
-
-        console.groupEnd();
+    applyAssignments() {
+      if (!document.body) {
+        console.warn('No document.body');
+        return;
       }
+
+      let currentTemplate = document.body.getAttribute('data-template');
+
+      const getPath = (str) => {
+        try {
+          let url = new URL(str);
+          return url.pathname.replace(/\/+$/, '');
+        } catch (e) {
+          if (!str.startsWith('/')) {
+            str = '/' + str;
+          }
+          return str.replace(/\/+$/, '');
+        }
+      };
+
+      const currentPath = getPath(window.location.href);
+
+      if (!currentTemplate) {
+        if (currentPath === '/' || currentPath === '') {
+          currentTemplate = 'homepage';
+        } else if (currentPath.indexOf('/products/') === 0) {
+          currentTemplate = 'product';
+        } else if (currentPath.indexOf('/collections/') === 0) {
+          if (currentPath.indexOf('/products/') !== -1) {
+            currentTemplate = 'product';
+          } else {
+            currentTemplate = 'collection';
+          }
+        } else if (currentPath.indexOf('/cart') === 0) {
+          currentTemplate = 'cart';
+        } else if (currentPath.indexOf('/checkout') === 0) {
+          currentTemplate = 'checkout';
+        } else {
+          currentTemplate = currentPath.split('/')[1] || 'home';
+        }
+      }
+
+      const standardGroups = ['global', currentTemplate];
+
+      // Get all valid assignments.
+      const assts = this.assignmentManager.getAllAssignments() || [];
+      
+      // Get currently active test IDs
+      const activeTestIds = this.allTests.map(test => test.id);
+      
+      // Filter assignments to only those for active tests that match the current page
+      const toApply = assts.filter(a => {
+        // First check if the test is still active
+        if (!activeTestIds.includes(a.testId)) {
+          return false;
+        }
+        // Then check if it's relevant to the current page
+        if (standardGroups.includes(a.pageGroup)) {
+          return true;
+        }
+        return getPath(a.pageGroup) === currentPath;
+      });
+
+      const prefix = 'ab';
+      // For every assignment that is applied, add the corresponding body class.
+      toApply.forEach(a => {
+        if (a.assigned_variant !== '0') {
+          document.body.classList.add(
+            `${prefix}-active`,
+            `${prefix}-${a.testId}`,
+            `${prefix}-${a.testId}-${a.assigned_variant}`
+          );
+        } else {
+          document.body.classList.add(`${prefix}-${a.testId}-0`);
+        }
+      });
+    }
 
     // Dedicated function to track exposure events separate from assignment creation.
     async trackExposureEvents() {
-      console.group('Tracking Exposure Events');
       try {
         const assignments = this.assignmentManager.getAllAssignments() || [];
         for (const a of assignments) {
-          console.log(`Tracking exposure for test ${a.testId}`);
           await window.postgresReporter.trackExposureEvent(a);
         }
-        console.log('Exposure events tracked successfully');
       } catch (err) {
         console.error('Failed to track exposure events:', err);
-      } finally {
-        console.groupEnd();
       }
     }
   }
@@ -384,7 +332,6 @@
       const check = () => {
         attempts++;
         if (window.TrackingCore && document.body) {
-          console.log('Dependencies OK after', attempts, 'attempts');
           resolve();
           return;
         }
@@ -403,22 +350,16 @@
   };
 
   const initSystem = async () => {
-    console.group('Initializing System');
     try {
       await waitForDeps();
-      console.log('Deps available, creating ABTestManager');
       const mgr = new ABTestManager();
       const ok = await mgr.initialize();
-      console.log('AB Testing init complete:', { success: ok });
     } catch (err) {
       console.error('Failed to init AB Testing System:', err);
-    } finally {
-      console.groupEnd();
     }
   };
 
   if (window.abTestingConfig?.enabled) {
-    console.log('Starting AB Testing System initialization');
     initSystem();
   }
 })();
